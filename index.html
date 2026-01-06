@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Güneş Sistemi AR - Gezegen Bilgi Kartları</title>
+
+    <!-- MindAR ve A-Frame Kütüphaneleri (Resmi Sürümler) -->
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <style>
+        /* ===== GENEL STILLER ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: #000;
+        }
+
+        /* A-Frame sahnesi için z-index ayarı */
+        a-scene {
+            z-index: 1 !important;
+        }
+
+        a-scene canvas {
+            z-index: 1 !important;
+        }
+
+        /* ===== YÜKLENİYOR EKRANI ===== */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+
+        #loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-planet {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #ff6b35, #f7c59f);
+            animation: pulse 1.5s ease-in-out infinite, rotate 3s linear infinite;
+            box-shadow: 0 0 60px rgba(255, 107, 53, 0.5);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            color: #fff;
+            margin-top: 30px;
+            font-size: 18px;
+            letter-spacing: 2px;
+        }
+
+        .loading-hint {
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 15px;
+            font-size: 14px;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        /* ===== KONTROL BUTONLARI ===== */
+        #controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(1.1);
+        }
+
+        .control-btn.muted {
+            background: rgba(255, 82, 82, 0.3);
+        }
+
+        /* ===== BİLGİ PANELİ (HUD) ===== */
+        #info-panel {
+            position: fixed;
+            bottom: -280px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 92%;
+            max-width: 380px;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 20px 20px 0 0;
+            padding: 16px;
+            z-index: 1000;
+            transition: bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        #info-panel.visible {
+            bottom: 0;
+        }
+
+        #info-panel.minimized {
+            bottom: -240px !important;
+        }
+
+        .panel-handle {
+            width: 50px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 3px;
+            margin: 0 auto 12px auto;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .panel-handle:hover {
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .panel-handle::after {
+            content: '';
+            display: block;
+            width: 30px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            margin: 4px auto 0 auto;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .planet-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+
+        .planet-name {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .planet-subtitle {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 2px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .info-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .info-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .planet-description {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            border-left: 3px solid;
+        }
+
+        /* ===== KARŞILAŞTIRMA PANELİ ===== */
+        #comparison-panel {
+            position: fixed;
+            top: -200px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 400px;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 0 0 16px 16px;
+            padding: 12px;
+            z-index: 1000;
+            transition: top 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #comparison-panel.visible {
+            top: 0;
+        }
+
+        .comparison-title {
+            text-align: center;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 15px;
+            align-items: start;
+        }
+
+        .compare-planet {
+            text-align: center;
+        }
+
+        .compare-planet-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 12px;
+        }
+
+        .compare-stat {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .compare-stat strong {
+            display: block;
+            color: #fff;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .vs-divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .reset-btn {
+            display: block;
+            width: 100%;
+            margin-top: 16px;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .reset-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        /* ===== KULLANIM İPUCU ===== */
+        #hint {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: fadeInUp 0.5s ease;
+        }
+
+        #hint.hidden {
+            display: none;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        /* ===== GEZEGENLERİN RENKLERİ ===== */
+        .color-sun {
+            background: linear-gradient(135deg, #ff6b35, #f7c59f);
+            border-color: #ff6b35;
+        }
+
+        .color-mercury {
+            background: linear-gradient(135deg, #8e8e8e, #b8b8b8);
+            border-color: #8e8e8e;
+        }
+
+        .color-venus {
+            background: linear-gradient(135deg, #e8c07d, #f5deb3);
+            border-color: #e8c07d;
+        }
+
+        .color-earth {
+            background: linear-gradient(135deg, #4a90d9, #2ecc71);
+            border-color: #4a90d9;
+        }
+
+        .color-mars {
+            background: linear-gradient(135deg, #cf6a4c, #e07850);
+            border-color: #cf6a4c;
+        }
+
+        .color-jupiter {
+            background: linear-gradient(135deg, #d4a574, #c9a86c);
+            border-color: #d4a574;
+        }
+
+        .color-saturn {
+            background: linear-gradient(135deg, #f4d58d, #e8c872);
+            border-color: #f4d58d;
+        }
+
+        .color-uranus {
+            background: linear-gradient(135deg, #7fdbda, #a8e6cf);
+            border-color: #7fdbda;
+        }
+
+        .color-neptune {
+            background: linear-gradient(135deg, #5b7be9, #7b68ee);
+            border-color: #5b7be9;
+        }
+
+        .color-moon {
+            background: linear-gradient(135deg, #c0c0c0, #e0e0e0);
+            border-color: #c0c0c0;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Yükleniyor Ekranı -->
+    <div id="loading-screen">
+        <div class="loading-planet"></div>
+        <div class="loading-text">AR Başlatılıyor...</div>
+        <div class="loading-hint">Lütfen kamera erişimine izin verin</div>
+    </div>
+
+    <!-- Kontrol Butonları -->
+    <div id="controls">
+        <button class="control-btn" id="sound-btn" title="Ses Aç/Kapat">🔊</button>
+    </div>
+
+    <!-- Kullanım İpucu -->
+    <div id="hint">
+        📷 Gezegen kartını kameraya tutun
+    </div>
+
+    <!-- Bilgi Paneli -->
+    <div id="info-panel">
+        <div class="panel-handle" id="panel-handle" title="Küçült/Büyüt"></div>
+        <div class="panel-header">
+            <div class="planet-icon" id="panel-icon">🌍</div>
+            <div>
+                <div class="planet-name" id="panel-name">Gezegen</div>
+                <div class="planet-subtitle" id="panel-subtitle">Güneş Sistemi</div>
+            </div>
+        </div>
+        <div class="info-grid" id="info-grid"></div>
+        <div class="planet-description" id="panel-description"></div>
+    </div>
+
+    <!-- Karşılaştırma Paneli -->
+    <div id="comparison-panel">
+        <div class="comparison-title">
+            ⚖️ Gezegen Karşılaştırması
+        </div>
+        <div class="comparison-grid">
+            <div class="compare-planet" id="compare-1"></div>
+            <div class="vs-divider">VS</div>
+            <div class="compare-planet" id="compare-2"></div>
+        </div>
+        <button class="reset-btn" id="reset-comparison">🔄 Karşılaştırmayı Sıfırla</button>
+    </div>
+
+    <!-- A-Frame AR Sahnesi -->
+    <a-scene mindar-image="imageTargetSrc: targets.mind;" color-space="sRGB"
+        renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
+
+        <!-- Gezegen Dokuları (Solar System Scope - Yerel Dosyalar) -->
+        <a-assets timeout="30000">
+            <img id="moon-texture" src="assets/textures/ay.jpg" crossorigin="anonymous">
+            <img id="earth-texture" src="assets/textures/dunya.jpg" crossorigin="anonymous">
+            <img id="sun-texture" src="assets/textures/gunes.jpg" crossorigin="anonymous">
+            <img id="jupiter-texture" src="assets/textures/2k_jupiter.jpg" crossorigin="anonymous">
+            <img id="mars-texture" src="assets/textures/2k_mars.jpg" crossorigin="anonymous">
+            <img id="mercury-texture" src="assets/textures/2k_mercury.jpg" crossorigin="anonymous">
+            <img id="neptune-texture" src="assets/textures/neptune.jpg" crossorigin="anonymous">
+            <img id="saturn-texture" src="assets/textures/2k_saturn.jpg" crossorigin="anonymous">
+            <img id="saturn-ring-texture" src="assets/textures/2k_saturn_ring_alpha.png" crossorigin="anonymous">
+            <img id="uranus-texture" src="assets/textures/2k_uranus.jpg" crossorigin="anonymous">
+            <img id="venus-texture" src="assets/textures/2k_venus_surface.jpg" crossorigin="anonymous">
+        </a-assets>
+
+        <!-- Kamera -->
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <!-- Işıklandırma -->
+        <a-light type="ambient" color="#ffffff" intensity="1"></a-light>
+        <a-light type="directional" color="#ffffff" intensity="1.2" position="1 1 1"></a-light>
+
+
+        <!-- HEDEF 0: AY - Gerçekçi Ay dokusu -->
+        <a-entity mindar-image-target="targetIndex: 0">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear"
+                animation__float="property: position; to: 0 0.4 0.1; dir: alternate; dur: 2000; easing: easeInOutSine; loop: true">
+                <a-sphere radius="0.18" src="#moon-texture" material="side: double"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 1: DÜNYA - Gerçekçi Dünya dokusu -->
+        <a-entity mindar-image-target="targetIndex: 1">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear"
+                animation__float="property: position; to: 0 0.4 0.1; dir: alternate; dur: 2500; easing: easeInOutSine; loop: true">
+                <a-sphere radius="0.18" src="#earth-texture" material="side: double"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 2: GÜNEŞ - Gerçekçi Güneş dokusu + Parlaklık -->
+        <a-entity mindar-image-target="targetIndex: 2">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 25000; easing: linear"
+                animation__pulse="property: scale; from: 1 1 1; to: 1.05 1.05 1.05; dir: alternate; dur: 1000; easing: easeInOutSine; loop: true">
+                <!-- Güneş -->
+                <a-sphere radius="0.22" src="#sun-texture"
+                    material="side: double; emissive: #ff6600; emissiveIntensity: 0.5">
+                </a-sphere>
+                <!-- Korona -->
+                <a-sphere radius="0.25" color="#ffaa00"
+                    material="emissive: #ff6600; emissiveIntensity: 0.3; opacity: 0.2; transparent: true"
+                    animation="property: scale; from: 1 1 1; to: 1.1 1.1 1.1; dir: alternate; dur: 500; loop: true">
+                </a-sphere>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 3: JÜPİTER - Gerçekçi Jüpiter dokusu -->
+        <a-entity mindar-image-target="targetIndex: 3">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
+                animation__float="property: position; to: 0 0.38 0.1; dir: alternate; dur: 3000; easing: easeInOutSine; loop: true">
+                <a-sphere radius="0.24" src="#jupiter-texture" material="side: double"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 4: MARS - Gerçekçi Mars dokusu -->
+        <a-entity mindar-image-target="targetIndex: 4">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 18000; easing: linear"
+                animation__float="property: position; to: 0 0.4 0.1; dir: alternate; dur: 2200; easing: easeInOutSine; loop: true">
+                <a-sphere radius="0.16" src="#mars-texture" material="side: double"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 5: MERKÜR - Gerçekçi Merkür dokusu -->
+        <a-entity mindar-image-target="targetIndex: 5">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 50000; easing: linear"
+                animation__float="property: position; to: 0 0.38 0.1; dir: alternate; dur: 2800; easing: easeInOutSine; loop: true">
+                <a-sphere radius="0.12" src="#mercury-texture" material="side: double"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 6: NEPTÜN - Gerçekçi Neptün dokusu -->
+        <a-entity mindar-image-target="targetIndex: 6">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 12000; easing: linear"
+                animation__float="property: position; to: 0 0.4 0.1; dir: alternate; dur: 2600; easing: easeInOutSine; loop: true">
+                <a-sphere radius="0.18" src="#neptune-texture" material="side: double"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 7: SATÜRN - Gerçekçi Satürn dokusu + Halka Texture -->
+        <a-entity mindar-image-target="targetIndex: 7">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"
+                animation__float="property: position; to: 0 0.4 0.1; dir: alternate; dur: 3200; easing: easeInOutSine; loop: true">
+                <!-- Satürn -->
+                <a-sphere radius="0.18" src="#saturn-texture" material="side: double"></a-sphere>
+                <!-- Halka - Texture ile -->
+                <a-ring position="0 0 0" rotation="70 0 0" radius-inner="0.22" radius-outer="0.38"
+                    src="#saturn-ring-texture" material="transparent: true; opacity: 0.9; side: double">
+                </a-ring>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 8: URANÜS - Gerçekçi Uranüs dokusu + İnce halka -->
+        <a-entity mindar-image-target="targetIndex: 8">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 90 360 0; loop: true; dur: 14000; easing: linear"
+                animation__float="property: position; to: 0 0.4 0.1; dir: alternate; dur: 2400; easing: easeInOutSine; loop: true">
+                <a-sphere radius="0.17" src="#uranus-texture" material="side: double"></a-sphere>
+                <!-- İnce halka -->
+                <a-torus position="0 0 0" rotation="90 0 0" radius="0.24" radius-tubular="0.006" color="#a8e6cf"
+                    material="opacity: 0.5; transparent: true; side: double">
+                </a-torus>
+            </a-entity>
+        </a-entity>
+
+        <!-- HEDEF 9: VENÜS - Gerçekçi Venüs atmosfer dokusu -->
+        <a-entity mindar-image-target="targetIndex: 9">
+            <a-entity position="0 0.35 0.1"
+                animation="property: rotation; to: 0 -360 0; loop: true; dur: 40000; easing: linear"
+                animation__float="property: position; to: 0 0.4 0.1; dir: alternate; dur: 2000; easing: easeInOutSine; loop: true">
+                <a-sphere radius="0.17" src="#venus-texture" material="side: double"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+
+
+
+    </a-scene>
+
+    <script>
+        // ===== GEZEGENLERİN VERİLERİ (KARTLARDAN ALINMIŞTIR) =====
+        const planetData = {
+            sun: {
+                name: "Güneş",
+                icon: "☀️",
+                subtitle: "Yıldız",
+                color: "color-sun",
+                info: {
+                    "Çap": "1,4 milyon km",
+                    "Yüzey Sıcaklığı": "5.527°C",
+                    "Çekirdek Sıcaklığı": "13,6 milyon °C",
+                    "Dünya'ya Uzaklık": "150 milyon km",
+                    "Gezegenleri": "Sekiz",
+                    "Yerçekimi": "Dünya'nın %91'i",
+                    "Sembolü": "⊙"
+                },
+                description: "Bize en yakın yıldız olan Güneş, Güneş Sistemi'nin toplam kütlesinin %99,9'unu oluşturur. Güneş fırtınaları sırasında yüzeyinde beliren karanlık noktalar güneş püskürmelerine neden olur. 2021'de NASA'nın Parker Solar Probe'u Güneş'e gerçekten dokundu.",
+                speech: "Güneş, bize en yakın yıldızdır. Güneş Sistemi'nin toplam kütlesinin yüzde 99,9'unu oluşturur. Çapı 1,4 milyon kilometre, yüzey sıcaklığı 5527 derece Celcius'tur. Çekirdek sıcaklığı ise 13,6 milyon dereceye ulaşır."
+            },
+            mercury: {
+                name: "Merkür",
+                icon: "☿️",
+                subtitle: "Güneş'e En Yakın Gezegen",
+                color: "color-mercury",
+                info: {
+                    "Çap": "4.880 km",
+                    "Gün": "175,9 Dünya günü",
+                    "Yıl": "88 Dünya günü",
+                    "Güneş'e Uzaklık": "58 milyon km",
+                    "Uyduları": "Yok",
+                    "Yerçekimi": "Dünya'nın %38'i",
+                    "Sembolü": "☿"
+                },
+                description: "Güneş'e en yakın gezegen olan Merkür aynı zamanda en küçük gezegendir. Sıcaklığı gündüz 425°C ile gece -175°C arasında değişir. Merkür o kadar yavaş döner ki gündoğumu ile batımı arasındaki süre tam bir Merkür yılı alır.",
+                speech: "Merkür, Güneş'e en yakın ve en küçük gezegendir. Çapı 4880 kilometre olup, bir yılı sadece 88 Dünya gününde tamamlar. Sıcaklığı gündüz 425 derece, gece ise eksi 175 dereceye düşer. Atmosferi olmadığı için yüzeyi kraterlerle kaplıdır."
+            },
+            venus: {
+                name: "Venüs",
+                icon: "♀️",
+                subtitle: "Dünya'nın İkizi",
+                color: "color-venus",
+                info: {
+                    "Çap": "12.100 km",
+                    "Gün": "116,8 Dünya günü",
+                    "Yıl": "224,7 Dünya günü",
+                    "Güneş'e Uzaklık": "108 milyon km",
+                    "Uyduları": "Yok",
+                    "Yerçekimi": "Dünya'nın %91'i",
+                    "Sembolü": "♀"
+                },
+                description: "Venüs, Ay'dan sonra gökyüzündeki en parlak cisimdir. Gezegenin yüzeyi karbondioksit gazından oluşan bulutlarla kaplıdır. Venüs ters döner, bu sebeple güneş batıdan doğar ve doğudan batar. Venus Express 2006'da gezegendeki şimşeklerin çakışını doğruladı.",
+                speech: "Venüs, Dünya'ya en yakın ve boyut olarak en benzer gezegendir. Ay'dan sonra gökyüzündeki en parlak cisimdir. Ters döndüğü için güneş batıdan doğar. Yüzey sıcaklığı 465 dereceye ulaşır ve kurşun bile burada erir."
+            },
+            earth: {
+                name: "Dünya",
+                icon: "🌍",
+                subtitle: "Evimiz",
+                color: "color-earth",
+                info: {
+                    "Çap": "12.742 km",
+                    "Gün": "24 saat",
+                    "Yıl": "365,256 Dünya günü",
+                    "Güneş'e Uzaklık": "150 milyon km",
+                    "Sakinleri": "Dünyalılar",
+                    "Uyduları": "1 tane",
+                    "Sembolü": "⊕"
+                },
+                description: "Güneş'e en yakın üçüncü gezegen olan Dünya'nın kayaç ağırlıklı bir yapısı vardır. Yüzeyinin %70'ini kaplayan su ve suyun en önemli özelliği sayesinde mümkün olan yaşam ile bitkilerdir. Atmosferimiz %78 azot, %21 oksijenden oluşur.",
+                speech: "Dünya, Güneş Sistemi'nde bilinen tek yaşanabilir gezegendir. Çapı on iki bin yedi yüz kırk iki kilometre olup, yüzeyinin yüzde yetmişi suyla kaplıdır. Atmosferimiz yüzde yetmiş sekiz azot ve yüzde yirmi bir oksijenden oluşur. Tek uydumuz Ay'dır."
+            },
+            mars: {
+                name: "Mars",
+                icon: "♂️",
+                subtitle: "Kızıl Gezegen",
+                color: "color-mars",
+                info: {
+                    "Çap": "6.794 km",
+                    "Gün": "24 Dünya saati, 42 dk",
+                    "Yıl": "687 Dünya günü",
+                    "Güneş'e Uzaklık": "228 milyon km",
+                    "Uyduları": "İki",
+                    "Yerçekimi": "Dünya'nın %38'i",
+                    "Sembolü": "♂"
+                },
+                description: "Eski zamanlarda Kızıl Gezegen olarak bilinen Mars, Roma savaş tanrısının adından gelir. Paslı demir oksit tabakasıyla kaplıdır ve uzayda turuncu-kırmızı tonlarda parlar. Olympus Mons, Güneş Sistemi'ndeki en yüksek dağdır ve Everest'ten 3 kat daha yüksektir.",
+                speech: "Mars, Kızıl Gezegen olarak bilinir. Paslı demir oksit tabakası gezegenin kızıl rengini verir. Olympus Mons adlı dağı, Everest'ten üç kat yüksektir. İki küçük uydusu vardır: Phobos ve Deimos. NASA'nın Spirit aracı yüzeyi inceleyip fotoğrafladı."
+            },
+            jupiter: {
+                name: "Jüpiter",
+                icon: "♃",
+                subtitle: "Gezegenlerin Kralı",
+                color: "color-jupiter",
+                info: {
+                    "Çap": "142.984 km",
+                    "Gün": "9 Dünya saati, 56 dk",
+                    "Yıl": "11,9 Dünya yılı",
+                    "Güneş'e Uzaklık": "778 milyon km",
+                    "Uyduları": "En az 90",
+                    "Yerçekimi": "Dünya'nın %253'ü",
+                    "Sıfatı": "Dış Gezegen"
+                },
+                description: "Jüpiter, Güneş Sistemi'ndeki en büyük gezegendir ve Dünya'dan on kat büyüktür. Sürekli dönen atmosferinde soluk renkli bölgeler ve koyu kahverengi şeritler vardır. Büyük Kırmızı Leke aslında asırlardan beri süren bir kasırgadır. Jüpiter'in devasa çekim kuvveti yıldızları kendisine çeker.",
+                speech: "Jüpiter, Güneş Sistemi'nin en büyük gezegenidir. Dünya'dan 11 kat büyüktür. Büyük Kırmızı Leke olarak bilinen kasırga, yüzyıllardır sürmektedir. 90'dan fazla uydusu vardır. Dünya'nın iki buçuk katı yerçekimine sahiptir ve gaz devidir."
+            },
+            saturn: {
+                name: "Satürn",
+                icon: "🪐",
+                subtitle: "Halkalı Gezegen",
+                color: "color-saturn",
+                info: {
+                    "Çap": "120.536 km",
+                    "Gün": "10 Dünya saati, 39 dk",
+                    "Yıl": "29,5 Dünya yılı",
+                    "Güneş'e Uzaklık": "1.427 milyon km",
+                    "Uyduları": "En az 145",
+                    "Yerçekimi": "Dünya'nın %91'i",
+                    "Sembolü": "♄"
+                },
+                description: "Güneş Sistemi'nin en büyük ikinci gezegeni olan Satürn'ün halkaları toz zerrelerinden arabaya kadar değişen buz parçalarından oluşur. Bu devasa halkalar ile sadece 10 metre kalınlığındadır. Satürn o kadar hızlı döner ki şekli basıktır ve ortası %10 daha şişkindir.",
+                speech: "Satürn, Güneş Sistemi'nin en büyük ikinci gezegenidir. Ünlü halkaları buz ve toz parçalarından oluşur. Eğer yeterince büyük bir okyanus olsaydı Satürn su üstünde yüzerdi. 145'ten fazla uydusu vardır ve rüzgarları saatte 1800 kilometreye ulaşabilir."
+            },
+            uranus: {
+                name: "Uranüs",
+                icon: "⛢",
+                subtitle: "Buz Devi",
+                color: "color-uranus",
+                info: {
+                    "Çap": "51.118 km",
+                    "Gün": "17 Dünya saati, 14 dk",
+                    "Yıl": "84 Dünya yılı",
+                    "Güneş'e Uzaklık": "2.871 milyon km",
+                    "Uyduları": "27",
+                    "Yerçekimi": "Dünya'nın %89'u",
+                    "Sembolü": "⛢"
+                },
+                description: "En büyük üçüncü gezegen olan Uranüs'ün yüzeyi donmuş metan bulutları nedeniyle sönük mavi renktedir. 1781'de William Herschel tarafından keşfedilen ilk gezegendir. Uranüs yan yatık döner ve donmuş metandan oluşan halkaları vardır. Uydu isimleri Shakespeare ve Pope'un eserlerinden alınır.",
+                speech: "Uranüs, Güneş Sistemi'nin üçüncü büyük gezegenidir. Metan atmosferi nedeniyle mavimsi renktedir. 1781'de teleskopla keşfedilen ilk gezegendir. Ekseni yatık olduğu için yan yatık döner. 27 uydusu vardır ve isimleri Shakespeare eserlerinden alınmıştır."
+            },
+            neptune: {
+                name: "Neptün",
+                icon: "🔵",
+                subtitle: "Güneş Sistemi'nin 8. Gezegeni",
+                color: "color-neptune",
+                info: {
+                    "Çap": "49.528 km",
+                    "Gün": "16 Dünya saati, 7 dk.",
+                    "Yıl": "165 Dünya yılı",
+                    "Güneş'e Uzaklık": "4.498 milyon km",
+                    "Uyduları": "13",
+                    "Yerçekimi": "Dünya'nın %114'ü",
+                    "Sembolü": "♆"
+                },
+                description: "Güneş Sistemi'nin 8. gezegeni olan Neptün adını Roma deniz tanrısından alır. Koyu mavi rengi metan atmosferinden kaynaklanır. Güneş Sistemi'nin en hızlı esen rüzgarları (saatte 2100 km) burada bulunur. En büyük uydusu Triton'da buz gayzeyleri vardır.",
+                speech: "Neptün, Güneş Sistemi'nin en uzak sekizinci gezegenidir. Koyu mavi rengi metan atmosferinden kaynaklanır. Güneş Sistemi'nin en güçlü rüzgarlarına ev sahipliği yapar, saatte 2100 kilometreye ulaşabilir. En büyük uydusu Triton'da buz gayzeyleri bulunur."
+            },
+            moon: {
+                name: "Ay",
+                icon: "🌙",
+                subtitle: "Dünya'nın Uydusu",
+                color: "color-moon",
+                info: {
+                    "Çap": "3.474 km",
+                    "Gün": "29,5 Dünya günü",
+                    "Yıl": "27 Dünya günü",
+                    "Dünya'ya Uzaklık": "384.403 km",
+                    "İnsanlı İniş": "Altı",
+                    "Yerçekimi": "Dünya'nın %17'si",
+                    "Sembolü": "☽"
+                },
+                description: "Dünya'nın tek doğal uydusu olan Ay, yaklaşık Avustralya boyutundadır. Yüzeyindeki karartılara Ay denizleri, soluk bölgelere de Ay dağları denir. Ay kendi etrafında Dünya'nın yörüngesinde döndüğü ile aynı hızda döner, bu yüzden sürekli aynı yüzünü görürüz.",
+                speech: "Ay, Dünya'nın tek doğal uydusudur. Yaklaşık Avustralya boyutundadır. Çapı üç bin dört yüz yetmiş dört kilometredir. Yüzeyindeki karanlık bölgelere Ay denizleri denir. Dünya'dan her zaman aynı yüzünü görürüz çünkü kendi ekseni etrafında dönüş süresi yörünge süresine eşittir."
+            }
+        };
+
+        // ===== UYGULAMA DEĞİŞKENLERİ =====
+        let isSoundEnabled = true;
+        let currentPlanet = null;
+        let previousPlanet = null;
+        let speechSynthesis = window.speechSynthesis;
+        let currentUtterance = null;
+        let comparisonHistory = [];
+
+        // ===== DOM ELEMANLARI =====
+        const loadingScreen = document.getElementById('loading-screen');
+        const soundBtn = document.getElementById('sound-btn');
+        const infoPanel = document.getElementById('info-panel');
+        const comparisonPanel = document.getElementById('comparison-panel');
+        const hint = document.getElementById('hint');
+
+        // ===== AR BAŞLATILDIĞINDA =====
+        document.addEventListener('DOMContentLoaded', () => {
+            const sceneEl = document.querySelector('a-scene');
+
+            sceneEl.addEventListener('arReady', () => {
+                setTimeout(() => {
+                    loadingScreen.classList.add('hidden');
+                }, 500);
+            });
+
+            sceneEl.addEventListener('arError', () => {
+                loadingScreen.querySelector('.loading-text').textContent = 'AR Başlatılamadı';
+                loadingScreen.querySelector('.loading-hint').textContent = 'Lütfen kamera erişimine izin verin ve sayfayı yenileyin.';
+            });
+
+            // Hedef algılama olayları
+            for (let i = 0; i < 10; i++) {
+                const target = document.querySelector(`[mindar-image-target="targetIndex: ${i}"]`);
+                if (target) {
+                    target.addEventListener('targetFound', (e) => {
+                        const planetKey = getPlanetKeyByIndex(i);
+                        onPlanetDetected(planetKey);
+                    });
+
+                    target.addEventListener('targetLost', (e) => {
+                        onPlanetLost();
+                    });
+                }
+            }
+
+            // Panel handle - küçült/büyüt
+            const panelHandle = document.getElementById('panel-handle');
+            if (panelHandle) {
+                panelHandle.addEventListener('click', () => {
+                    infoPanel.classList.toggle('minimized');
+                });
+            }
+        });
+
+        // ===== INDEX'E GÖRE GEZEGEN ANAHTARI =====
+        // Sıralama: Ay, Dünya, Güneş, Jüpiter, Mars, Merkür, Neptün, Satürn, Uranüs, Venüs
+        function getPlanetKeyByIndex(index) {
+            const keys = ['moon', 'earth', 'sun', 'jupiter', 'mars', 'mercury', 'neptune', 'saturn', 'uranus', 'venus'];
+            return keys[index];
+        }
+
+        // ===== GEZEGEN ALGILANDI =====
+        function onPlanetDetected(planetKey) {
+            const planet = planetData[planetKey];
+            if (!planet) return;
+
+            // Önceki gezegeni kaydet (karşılaştırma için)
+            if (currentPlanet && currentPlanet !== planetKey) {
+                previousPlanet = currentPlanet;
+            }
+
+            currentPlanet = planetKey;
+            hint.classList.add('hidden');
+
+            // Bilgi panelini güncelle
+            updateInfoPanel(planet);
+            infoPanel.classList.add('visible');
+
+            // Sesli anlatım
+            if (isSoundEnabled) {
+                speakText(planet.speech);
+            }
+
+            // Karşılaştırma kontrolü
+            if (previousPlanet && previousPlanet !== currentPlanet) {
+                if (!comparisonHistory.includes(previousPlanet)) {
+                    comparisonHistory.push(previousPlanet);
+                }
+                if (!comparisonHistory.includes(currentPlanet)) {
+                    comparisonHistory.push(currentPlanet);
+                }
+
+                if (comparisonHistory.length >= 2) {
+                    showComparison(comparisonHistory[comparisonHistory.length - 2], comparisonHistory[comparisonHistory.length - 1]);
+                }
+            }
+        }
+
+        // ===== GEZEGEN KAYBOLDU =====
+        function onPlanetLost() {
+            infoPanel.classList.remove('visible');
+            stopSpeech();
+
+            setTimeout(() => {
+                if (!infoPanel.classList.contains('visible')) {
+                    hint.classList.remove('hidden');
+                }
+            }, 2000);
+        }
+
+        // ===== BİLGİ PANELİNİ GÜNCELLE =====
+        function updateInfoPanel(planet) {
+            document.getElementById('panel-icon').textContent = planet.icon;
+            document.getElementById('panel-icon').className = `planet-icon ${planet.color}`;
+            document.getElementById('panel-name').textContent = planet.name;
+            document.getElementById('panel-subtitle').textContent = planet.subtitle;
+
+            // Bilgi grid'i
+            const infoGrid = document.getElementById('info-grid');
+            infoGrid.innerHTML = '';
+
+            let count = 0;
+            for (const [label, value] of Object.entries(planet.info)) {
+                if (count >= 4) break; // Sadece ilk 4 bilgiyi göster
+                const div = document.createElement('div');
+                div.className = 'info-item';
+                div.innerHTML = `
+                    <div class="info-label">${label}</div>
+                    <div class="info-value">${value}</div>
+                `;
+                infoGrid.appendChild(div);
+                count++;
+            }
+
+            // Açıklama
+            const description = document.getElementById('panel-description');
+            description.textContent = planet.description;
+            description.className = `planet-description ${planet.color}`;
+        }
+
+        // ===== KARŞILAŞTIRMA GÖSTER =====
+        function showComparison(planet1Key, planet2Key) {
+            const planet1 = planetData[planet1Key];
+            const planet2 = planetData[planet2Key];
+
+            const compare1 = document.getElementById('compare-1');
+            const compare2 = document.getElementById('compare-2');
+
+            compare1.innerHTML = `
+                <div class="compare-planet-name">${planet1.icon} ${planet1.name}</div>
+                <div class="compare-stat">Çap<strong>${planet1.info['Çap']}</strong></div>
+                <div class="compare-stat">Gün<strong>${planet1.info['Gün'] || planet1.info['Yıl']}</strong></div>
+                <div class="compare-stat">Yerçekimi<strong>${planet1.info['Yerçekimi'] || '-'}</strong></div>
+            `;
+
+            compare2.innerHTML = `
+                <div class="compare-planet-name">${planet2.icon} ${planet2.name}</div>
+                <div class="compare-stat">Çap<strong>${planet2.info['Çap']}</strong></div>
+                <div class="compare-stat">Gün<strong>${planet2.info['Gün'] || planet2.info['Yıl']}</strong></div>
+                <div class="compare-stat">Yerçekimi<strong>${planet2.info['Yerçekimi'] || '-'}</strong></div>
+            `;
+
+            comparisonPanel.classList.add('visible');
+        }
+
+        // ===== SESLİ ANLATIM =====
+        function speakText(text) {
+            stopSpeech();
+
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            currentUtterance.lang = 'tr-TR';
+            currentUtterance.rate = 0.9;
+            currentUtterance.pitch = 1;
+            currentUtterance.volume = 1;
+
+            // Türkçe ses bul
+            const voices = speechSynthesis.getVoices();
+            const turkishVoice = voices.find(voice => voice.lang.includes('tr'));
+            if (turkishVoice) {
+                currentUtterance.voice = turkishVoice;
+            }
+
+            speechSynthesis.speak(currentUtterance);
+        }
+
+        function stopSpeech() {
+            if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+            }
+        }
+
+        // ===== SES BUTONU =====
+        soundBtn.addEventListener('click', () => {
+            isSoundEnabled = !isSoundEnabled;
+            soundBtn.textContent = isSoundEnabled ? '🔊' : '🔇';
+            soundBtn.classList.toggle('muted', !isSoundEnabled);
+
+            if (!isSoundEnabled) {
+                stopSpeech();
+            }
+        });
+
+        // ===== KARŞILAŞTIRMAYI SIFIRLA =====
+        document.getElementById('reset-comparison').addEventListener('click', () => {
+            comparisonPanel.classList.remove('visible');
+            comparisonHistory = [];
+            previousPlanet = null;
+        });
+
+        // ===== SES YÜKLENDİĞİNDE =====
+        speechSynthesis.addEventListener('voiceschanged', () => {
+            // Sesler yüklendi
+        });
+    </script>
+</body>
+
+</html>

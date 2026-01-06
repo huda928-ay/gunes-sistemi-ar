@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindAR Test</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-family: Arial;
+            z-index: 1000;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">Kartı kameraya tutun - Turuncu top görünmeli</div>
+
+    <a-scene mindar-image="imageTargetSrc: targets.mind; autoStart: true" vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false" embedded>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-light type="ambient" color="#fff" intensity="1"></a-light>
+        <a-light type="directional" position="0 1 2" intensity="1"></a-light>
+
+        <!-- Hedef 0 - ilk yüklediğiniz kart (AY) -->
+        <a-entity mindar-image-target="targetIndex: 0">
+            <a-box position="0 0 0.2" width="0.5" height="0.5" depth="0.5" color="#FF6600"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 3000">
+            </a-box>
+        </a-entity>
+
+        <!-- Hedef 1 - ikinci kart (DÜNYA) -->
+        <a-entity mindar-image-target="targetIndex: 1">
+            <a-sphere position="0 0 0.3" radius="0.3" color="#0088FF"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 2000">
+            </a-sphere>
+        </a-entity>
+
+        <!-- Hedef 2 - üçüncü kart (GÜNEŞ) -->
+        <a-entity mindar-image-target="targetIndex: 2">
+            <a-sphere position="0 0 0.3" radius="0.4" color="#FF4400"
+                material="emissive: #FF2200; emissiveIntensity: 0.5"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 2500">
+            </a-sphere>
+        </a-entity>
+
+    </a-scene>
+</body>
+
+</html>
