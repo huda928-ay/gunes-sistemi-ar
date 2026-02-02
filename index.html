@@ -138,6 +138,70 @@
             background: rgba(255, 82, 82, 0.3);
         }
 
+        .control-btn.active {
+            background: rgba(102, 126, 234, 0.5);
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .control-btn.locked {
+            background: rgba(255, 193, 7, 0.4);
+        }
+
+        /* ===== GESTURE INDICATOR ===== */
+        #gesture-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-size: 16px;
+            z-index: 1001;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            animation: fadeIn 0.2s ease;
+            pointer-events: none;
+        }
+
+        #gesture-indicator.visible {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        /* ===== SCALE INDICATOR ===== */
+        #scale-indicator {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1001;
+            display: none;
+            pointer-events: none;
+        }
+
+        #scale-indicator.visible {
+            display: block;
+        }
+
         /* ===== BİLGİ PANELİ (HUD) ===== */
         #info-panel {
             position: fixed;
@@ -281,6 +345,44 @@
 
         #comparison-panel.visible {
             top: 0;
+        }
+
+        #comparison-panel.collapsed {
+            top: -350px;
+        }
+
+        #comparison-panel.collapsed #comparison-toggle {
+            top: 350px;
+        }
+
+        #comparison-toggle {
+            position: absolute;
+            bottom: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 30px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 1001;
+            transition: all 0.3s ease;
+        }
+
+        #comparison-toggle:hover {
+            background: rgba(30, 40, 60, 0.95);
+        }
+
+        #comparison-content {
+            transition: opacity 0.3s ease;
+        }
+
+        #comparison-panel.collapsed #comparison-content {
+            opacity: 0;
         }
 
         .comparison-title {
@@ -455,7 +557,18 @@
     <!-- Kontrol Butonları -->
     <div id="controls">
         <button class="control-btn" id="sound-btn" title="Ses Aç/Kapat">🔊</button>
+        <button class="control-btn" id="rotation-btn" title="Otomatik Dönüşü Aç/Kapat">🔄</button>
+        <button class="control-btn" id="reset-btn" title="Boyutu Sıfırla">↺</button>
     </div>
+
+    <!-- Gesture Indicator -->
+    <div id="gesture-indicator">
+        <span id="gesture-icon">👆</span>
+        <span id="gesture-text">Hareket</span>
+    </div>
+
+    <!-- Scale Indicator -->
+    <div id="scale-indicator">1.0x</div>
 
     <!-- Kullanım İpucu -->
     <div id="hint">
@@ -478,15 +591,18 @@
 
     <!-- Karşılaştırma Paneli -->
     <div id="comparison-panel">
-        <div class="comparison-title">
-            ⚖️ Gezegen Karşılaştırması
+        <button id="comparison-toggle" title="Gizle/Göster">▲</button>
+        <div id="comparison-content">
+            <div class="comparison-title">
+                ⚖️ Gezegen Karşılaştırması
+            </div>
+            <div class="comparison-grid">
+                <div class="compare-planet" id="compare-1"></div>
+                <div class="vs-divider">VS</div>
+                <div class="compare-planet" id="compare-2"></div>
+            </div>
+            <button class="reset-btn" id="reset-comparison">🔄 Karşılaştırmayı Sıfırla</button>
         </div>
-        <div class="comparison-grid">
-            <div class="compare-planet" id="compare-1"></div>
-            <div class="vs-divider">VS</div>
-            <div class="compare-planet" id="compare-2"></div>
-        </div>
-        <button class="reset-btn" id="reset-comparison">🔄 Karşılaştırmayı Sıfırla</button>
     </div>
 
     <!-- A-Frame AR Sahnesi -->
@@ -812,6 +928,39 @@
         let currentUtterance = null;
         let comparisonHistory = [];
 
+        // ===== GESTURE HANDLER DEĞİŞKENLERİ =====
+        let isAutoRotationEnabled = true;
+        let currentScale = 1.0;
+        let currentPositionOffset = { x: 0, y: 0 };
+        let currentRotationOffset = 0;
+        let activePlanetEntity = null;
+
+        // Touch state tracking
+        let touchState = {
+            isGesturing: false,
+            initialPinchDistance: 0,
+            initialScale: 1.0,
+            initialRotation: 0,
+            startX: 0,
+            startY: 0,
+            lastX: 0,
+            lastY: 0,
+            touchCount: 0
+        };
+
+        // Limits
+        const SCALE_MIN = 0.5;
+        const SCALE_MAX = 3.0;
+        const POSITION_LIMIT_X = 1.5;
+        const POSITION_LIMIT_Y = 1.5;
+
+        // Manual rotation state
+        let isManualRotating = false;
+        let isRightMouseDown = false; // Global for applyTransform access
+        let manualRotationX = 0;
+        let manualRotationY = 0;
+        let wasAutoRotating = true;
+
         // ===== DOM ELEMANLARI =====
         const loadingScreen = document.getElementById('loading-screen');
         const soundBtn = document.getElementById('sound-btn');
@@ -854,6 +1003,17 @@
             if (panelHandle) {
                 panelHandle.addEventListener('click', () => {
                     infoPanel.classList.toggle('minimized');
+                });
+            }
+
+            // Comparison panel toggle - gizle/göster
+            const comparisonToggle = document.getElementById('comparison-toggle');
+            const comparisonPanel = document.getElementById('comparison-panel');
+            if (comparisonToggle && comparisonPanel) {
+                comparisonToggle.addEventListener('click', () => {
+                    const isCollapsed = comparisonPanel.classList.toggle('collapsed');
+                    comparisonToggle.textContent = isCollapsed ? '▼' : '▲';
+                    comparisonToggle.title = isCollapsed ? 'Karşılaştırmayı Göster' : 'Karşılaştırmayı Gizle';
                 });
             }
         });
@@ -1017,6 +1177,393 @@
         speechSynthesis.addEventListener('voiceschanged', () => {
             // Sesler yüklendi
         });
+
+        // ===== GESTURE HANDLER FUNCTIONS =====
+        const gestureIndicator = document.getElementById('gesture-indicator');
+        const gestureIcon = document.getElementById('gesture-icon');
+        const gestureText = document.getElementById('gesture-text');
+        const scaleIndicator = document.getElementById('scale-indicator');
+        const rotationBtn = document.getElementById('rotation-btn');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // Touch distance calculator
+        function getTouchDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // Touch angle calculator
+        function getTouchAngle(touches) {
+            const dx = touches[1].clientX - touches[0].clientX;
+            const dy = touches[1].clientY - touches[0].clientY;
+            return Math.atan2(dy, dx) * (180 / Math.PI);
+        }
+
+        // Show gesture indicator
+        function showGestureIndicator(icon, text) {
+            gestureIcon.textContent = icon;
+            gestureText.textContent = text;
+            gestureIndicator.classList.add('visible');
+        }
+
+        // Hide gesture indicator
+        function hideGestureIndicator() {
+            gestureIndicator.classList.remove('visible');
+        }
+
+        // Update scale indicator
+        function updateScaleIndicator(scale) {
+            scaleIndicator.textContent = scale.toFixed(1) + 'x';
+            scaleIndicator.classList.add('visible');
+            clearTimeout(scaleIndicator.hideTimeout);
+            scaleIndicator.hideTimeout = setTimeout(() => {
+                scaleIndicator.classList.remove('visible');
+            }, 1500);
+        }
+
+        // Apply transform to active planet
+        function applyTransform() {
+            if (!activePlanetEntity) return;
+
+            const planetModel = activePlanetEntity.querySelector('a-entity');
+            if (!planetModel) return;
+
+            console.log('applyTransform - isRightMouseDown:', isRightMouseDown, '| hasAnimation:', planetModel.hasAttribute('animation'));
+
+            // IMPORTANT: Remove float animation that overrides position
+            if (planetModel.hasAttribute('animation__float')) {
+                planetModel.removeAttribute('animation__float');
+            }
+            // Remove Sun's pulse animation that blocks zoom
+            if (planetModel.hasAttribute('animation__pulse')) {
+                planetModel.removeAttribute('animation__pulse');
+            }
+
+            // If actively right-dragging, remove auto-rotation and apply manual rotation
+            if (isRightMouseDown) {
+                if (planetModel.hasAttribute('animation')) {
+                    // Store original animation for later restore
+                    if (!planetModel.getAttribute('data-original-animation')) {
+                        planetModel.setAttribute('data-original-animation', planetModel.getAttribute('animation'));
+                    }
+                    planetModel.removeAttribute('animation');
+                }
+                // Apply manual rotation
+                planetModel.setAttribute('rotation', `${manualRotationX} ${manualRotationY} 0`);
+            }
+
+            // Apply scale
+            planetModel.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+
+            // Apply position offset
+            const baseY = 0.35;
+            const baseZ = 0.1;
+            planetModel.setAttribute('position',
+                `${currentPositionOffset.x} ${baseY + currentPositionOffset.y} ${baseZ}`);
+        }
+
+        // Reset transform
+        function resetTransform() {
+            currentScale = 1.0;
+            currentPositionOffset = { x: 0, y: 0 };
+            currentRotationOffset = 0;
+
+            if (activePlanetEntity) {
+                const planetModel = activePlanetEntity.querySelector('a-entity');
+                if (planetModel) {
+                    planetModel.setAttribute('scale', '1 1 1');
+                    planetModel.setAttribute('position', '0 0.35 0.1');
+                    planetModel.setAttribute('rotation', '0 0 0');
+                    // Restore auto-rotation
+                    console.log('🔄 Reset called - isAutoRotationEnabled:', isAutoRotationEnabled);
+                    planetModel.removeAttribute('animation');
+                    if (isAutoRotationEnabled) {
+                        const defaultAnim = 'property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear';
+                        setTimeout(() => {
+                            planetModel.setAttribute('animation', defaultAnim);
+                            console.log('✅ Animation restored');
+                        }, 100);
+                    }
+                }
+            }
+            // Reset manual rotation state
+            isManualRotating = false;
+            manualRotationX = 0;
+            manualRotationY = 0;
+
+            showGestureIndicator('↺', 'Sıfırlandı');
+            setTimeout(hideGestureIndicator, 1000);
+            updateScaleIndicator(1.0);
+        }
+
+        // Toggle auto rotation
+        function toggleAutoRotation() {
+            isAutoRotationEnabled = !isAutoRotationEnabled;
+            rotationBtn.classList.toggle('active', !isAutoRotationEnabled);
+
+            // Apply to all planet entities
+            for (let i = 0; i < 10; i++) {
+                const target = document.querySelector(`[mindar-image-target=\"targetIndex: ${i}\"]`);
+                if (target) {
+                    // Use first a-entity child (not animation selector)
+                    const planetModel = target.querySelector('a-entity');
+                    if (planetModel) {
+                        planetModel.removeAttribute('animation');
+                        if (isAutoRotationEnabled) {
+                            // Restore animation with default string
+                            const defaultAnim = 'property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear';
+                            setTimeout(() => {
+                                planetModel.setAttribute('animation', defaultAnim);
+                                console.log('✅ Toggle ON - Animation restored');
+                            }, 100);
+                        } else {
+                            console.log('⏸️ Toggle OFF - Animation stopped');
+                        }
+                    }
+                }
+            }
+
+            showGestureIndicator(isAutoRotationEnabled ? '🔄' : '⏸️',
+                isAutoRotationEnabled ? 'Dönüş Açık' : 'Dönüş Kapalı');
+            setTimeout(hideGestureIndicator, 1000);
+        }
+
+        // Touch event handlers
+        function handleTouchStart(e) {
+            if (!activePlanetEntity) return;
+
+            const touches = e.touches;
+            touchState.touchCount = touches.length;
+            touchState.isGesturing = true;
+
+            if (touches.length === 1) {
+                // Single touch - drag
+                touchState.startX = touches[0].clientX;
+                touchState.startY = touches[0].clientY;
+                touchState.lastX = touches[0].clientX;
+                touchState.lastY = touches[0].clientY;
+            } else if (touches.length === 2) {
+                // Two finger touch - pinch/rotate
+                touchState.initialPinchDistance = getTouchDistance(touches);
+                touchState.initialScale = currentScale;
+                touchState.initialRotation = getTouchAngle(touches);
+            }
+        }
+
+        function handleTouchMove(e) {
+            if (!activePlanetEntity || !touchState.isGesturing) return;
+            e.preventDefault();
+
+            const touches = e.touches;
+
+            if (touches.length === 1 && touchState.touchCount === 1) {
+                // Drag gesture
+                const deltaX = (touches[0].clientX - touchState.lastX) / window.innerWidth;
+                const deltaY = (touches[0].clientY - touchState.lastY) / window.innerHeight;
+
+                currentPositionOffset.x += deltaX * 1.5;
+                currentPositionOffset.y -= deltaY * 1.5; // Invert Y
+
+                // Apply limits
+                currentPositionOffset.x = Math.max(-POSITION_LIMIT_X,
+                    Math.min(POSITION_LIMIT_X, currentPositionOffset.x));
+                currentPositionOffset.y = Math.max(-POSITION_LIMIT_Y,
+                    Math.min(POSITION_LIMIT_Y, currentPositionOffset.y));
+
+                touchState.lastX = touches[0].clientX;
+                touchState.lastY = touches[0].clientY;
+
+                showGestureIndicator('👆', 'Taşıma');
+                applyTransform();
+
+            } else if (touches.length === 2) {
+                // Pinch gesture
+                const currentDistance = getTouchDistance(touches);
+                const scaleChange = currentDistance / touchState.initialPinchDistance;
+
+                currentScale = touchState.initialScale * scaleChange;
+                currentScale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, currentScale));
+
+                showGestureIndicator('🔍', 'Yakınlaştırma');
+                updateScaleIndicator(currentScale);
+                applyTransform();
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (e.touches.length === 0) {
+                touchState.isGesturing = false;
+                touchState.touchCount = 0;
+                setTimeout(hideGestureIndicator, 300);
+            } else {
+                // Still have touches, update count
+                touchState.touchCount = e.touches.length;
+                if (e.touches.length === 1) {
+                    touchState.lastX = e.touches[0].clientX;
+                    touchState.lastY = e.touches[0].clientY;
+                }
+            }
+        }
+
+        // Add touch event listeners to scene
+        document.addEventListener('DOMContentLoaded', () => {
+            const sceneCanvas = document.querySelector('a-scene');
+            if (sceneCanvas) {
+                sceneCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+                sceneCanvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+                sceneCanvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+            }
+        });
+
+        // Button event listeners
+        rotationBtn.addEventListener('click', toggleAutoRotation);
+        resetBtn.addEventListener('click', resetTransform);
+
+        // ===== MOUSE EVENT HANDLERS (PC test) =====
+        let isMouseDown = false;
+        let lastMouseX = 0, lastMouseY = 0;
+
+        document.querySelector('a-scene').addEventListener('loaded', function () {
+            const sceneEl = this;
+
+            sceneEl.addEventListener('mousedown', (e) => {
+                console.log('🖱️ Mousedown - activePlanetEntity:', activePlanetEntity);
+                if (!activePlanetEntity) return;
+                if (e.button !== 0) return; // Only left-click
+
+                // Reset manual rotation and restore animation
+                if (isManualRotating) {
+                    isManualRotating = false;
+                    const planetModel = activePlanetEntity.querySelector('a-entity');
+                    if (planetModel && isAutoRotationEnabled) {
+                        const storedAnim = planetModel.getAttribute('data-original-animation');
+                        const animStr = storedAnim || 'property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear';
+                        planetModel.removeAttribute('animation');
+                        setTimeout(() => planetModel.setAttribute('animation', animStr), 50);
+                    }
+                }
+
+                isMouseDown = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                console.log('✅ Mouse drag started');
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isMouseDown || !activePlanetEntity) return;
+                const deltaX = (e.clientX - lastMouseX) / window.innerWidth * 3;
+                const deltaY = (e.clientY - lastMouseY) / window.innerHeight * 3;
+                currentPositionOffset.x += deltaX;
+                currentPositionOffset.y -= deltaY;
+                currentPositionOffset.x = Math.max(-POSITION_LIMIT_X, Math.min(POSITION_LIMIT_X, currentPositionOffset.x));
+                currentPositionOffset.y = Math.max(-POSITION_LIMIT_Y, Math.min(POSITION_LIMIT_Y, currentPositionOffset.y));
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                console.log('📍 Position offset:', currentPositionOffset.x.toFixed(3), currentPositionOffset.y.toFixed(3));
+                showGestureIndicator('👆', 'Taşıma');
+                applyTransform();
+            });
+
+            document.addEventListener('mouseup', () => {
+                isMouseDown = false;
+                setTimeout(hideGestureIndicator, 300);
+            });
+
+            sceneEl.addEventListener('wheel', (e) => {
+                if (!activePlanetEntity) return;
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                currentScale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, currentScale + delta));
+                showGestureIndicator('🔍', 'Yakınlaştırma');
+                updateScaleIndicator(currentScale);
+                applyTransform();
+            }, { passive: false });
+
+            // ===== RIGHT-CLICK ROTATION (PC) =====
+            let lastRightMouseX = 0, lastRightMouseY = 0;
+
+            // Disable context menu on scene
+            sceneEl.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+
+            sceneEl.addEventListener('mousedown', (e) => {
+                if (e.button === 2 && activePlanetEntity) { // Right click
+                    isRightMouseDown = true;
+                    isManualRotating = true;
+                    wasAutoRotating = isAutoRotationEnabled;
+                    lastRightMouseX = e.clientX;
+                    lastRightMouseY = e.clientY;
+                    showGestureIndicator('🔄', 'Manuel Döndürme');
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isRightMouseDown || !activePlanetEntity) return;
+
+                const deltaX = (e.clientX - lastRightMouseX) * 0.5;
+                const deltaY = (e.clientY - lastRightMouseY) * 0.5;
+
+                manualRotationY += deltaX; // Left-right movement rotates around Y axis
+                manualRotationX -= deltaY; // Up-down movement rotates around X axis
+
+                // Clamp X rotation to prevent flipping
+                manualRotationX = Math.max(-90, Math.min(90, manualRotationX));
+
+                lastRightMouseX = e.clientX;
+                lastRightMouseY = e.clientY;
+
+                applyTransform();
+            });
+
+            document.addEventListener('mouseup', (e) => {
+                if (e.button === 2) {
+                    isRightMouseDown = false;
+                    setTimeout(hideGestureIndicator, 300);
+
+                    // Restore animation when right-click drag ends
+                    console.log('🔄 Mouseup - activePlanetEntity:', !!activePlanetEntity, 'isAutoRotationEnabled:', isAutoRotationEnabled);
+                    if (activePlanetEntity && isAutoRotationEnabled) {
+                        const planetModel = activePlanetEntity.querySelector('a-entity');
+                        if (planetModel) {
+                            // Always use default animation string (storedAnim might be object)
+                            const defaultAnim = 'property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear';
+                            planetModel.removeAttribute('animation');
+                            setTimeout(() => {
+                                planetModel.setAttribute('animation', defaultAnim);
+                                console.log('✅ Animation restored');
+                            }, 100);
+                        }
+                    }
+                }
+            });
+        });
+
+        // Update activePlanetEntity when planet is detected
+        const originalOnPlanetDetected = onPlanetDetected;
+        onPlanetDetected = function (planetKey) {
+            console.log('🌍 Planet detected:', planetKey);
+            // Reset rotation state for new planet
+            isManualRotating = false;
+            manualRotationX = 0;
+            manualRotationY = 0;
+            originalOnPlanetDetected(planetKey);
+            const index = ['moon', 'earth', 'sun', 'jupiter', 'mars', 'mercury', 'neptune', 'saturn', 'uranus', 'venus'].indexOf(planetKey);
+            if (index !== -1) {
+                activePlanetEntity = document.querySelector(`[mindar-image-target=\"targetIndex: ${index}\"]`);
+                console.log('✅ Active planet entity set:', activePlanetEntity);
+            }
+        };
+
+        // Reset when planet is lost
+        const originalOnPlanetLost = onPlanetLost;
+        onPlanetLost = function () {
+            originalOnPlanetLost();
+            // Optionally reset transform when planet is lost
+            // resetTransform();
+            activePlanetEntity = null;
+        };
     </script>
 </body>
 

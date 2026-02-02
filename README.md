@@ -16,9 +16,15 @@ WebAR tabanlı eğitim uygulaması. Basılı gezegen kartlarını kameraya tutar
 ```
 staj/
 ├── index.html      
+<<<<<<< HEAD
 ├── targets.mind    
 └── assets/
     └── textures/ 
+=======
+├── targets.mind   
+└── assets/
+    └── textures/   
+>>>>>>> 1f2d9d3 (3D model için kullanıcı etkileşimi eklendi)
 ```
 
 ## ⚙️ Kontroller
