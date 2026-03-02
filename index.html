@@ -1346,10 +1346,13 @@
                 touchState.lastX = touches[0].clientX;
                 touchState.lastY = touches[0].clientY;
             } else if (touches.length === 2) {
-                // Two finger touch - pinch/rotate
+                // Two finger touch - pinch zoom + manual rotation
                 touchState.initialPinchDistance = getTouchDistance(touches);
                 touchState.initialScale = currentScale;
                 touchState.initialRotation = getTouchAngle(touches);
+                // İki parmak orta noktasını kaydet (döndürme için)
+                touchState.lastMidX = (touches[0].clientX + touches[1].clientX) / 2;
+                touchState.lastMidY = (touches[0].clientY + touches[1].clientY) / 2;
             }
         }
 
@@ -1380,15 +1383,43 @@
                 applyTransform();
 
             } else if (touches.length === 2) {
-                // Pinch gesture
+                // --- ZOOM (pinch) ---
                 const currentDistance = getTouchDistance(touches);
                 const scaleChange = currentDistance / touchState.initialPinchDistance;
-
                 currentScale = touchState.initialScale * scaleChange;
                 currentScale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, currentScale));
-
-                showGestureIndicator('🔍', 'Yakınlaştırma');
                 updateScaleIndicator(currentScale);
+
+                // --- DÖNDÜRME (iki parmak orta nokta hareketi) ---
+                const midX = (touches[0].clientX + touches[1].clientX) / 2;
+                const midY = (touches[0].clientY + touches[1].clientY) / 2;
+                const rotDeltaX = midX - (touchState.lastMidX || midX);
+                const rotDeltaY = midY - (touchState.lastMidY || midY);
+
+                if (Math.abs(rotDeltaX) > 0.5 || Math.abs(rotDeltaY) > 0.5) {
+                    isManualRotating = true;
+                    isRightMouseDown = true; // applyTransform'a döndürme modunu bildir
+
+                    manualRotationY += rotDeltaX * 0.5;   // yatay kayma → Y ekseni
+                    manualRotationX -= rotDeltaY * 0.5;   // dikey kayma → X ekseni
+                    manualRotationX = Math.max(-90, Math.min(90, manualRotationX));
+
+                    // Otomatik dönüşü geçici durdur
+                    if (activePlanetEntity) {
+                        const planetModel = activePlanetEntity.querySelector('a-entity');
+                        if (planetModel && planetModel.hasAttribute('animation')) {
+                            if (!planetModel.getAttribute('data-original-animation')) {
+                                planetModel.setAttribute('data-original-animation', planetModel.getAttribute('animation'));
+                            }
+                            planetModel.removeAttribute('animation');
+                        }
+                    }
+                }
+
+                touchState.lastMidX = midX;
+                touchState.lastMidY = midY;
+
+                showGestureIndicator('🔄', 'Döndürme + Yakınlaştırma');
                 applyTransform();
             }
         }
@@ -1398,12 +1429,40 @@
                 touchState.isGesturing = false;
                 touchState.touchCount = 0;
                 setTimeout(hideGestureIndicator, 300);
+
+                // İki parmak döndürmesinden çıkışta otomatik dönüşü geri getir
+                if (isManualRotating && isAutoRotationEnabled && activePlanetEntity) {
+                    const planetModel = activePlanetEntity.querySelector('a-entity');
+                    if (planetModel) {
+                        const defaultAnim = 'property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear';
+                        planetModel.removeAttribute('animation');
+                        setTimeout(() => planetModel.setAttribute('animation', defaultAnim), 100);
+                    }
+                }
+                isRightMouseDown = false;
+                isManualRotating = false;
+
             } else {
-                // Still have touches, update count
+                // Parmak sayısı değişti
                 touchState.touchCount = e.touches.length;
                 if (e.touches.length === 1) {
                     touchState.lastX = e.touches[0].clientX;
                     touchState.lastY = e.touches[0].clientY;
+                    // 2 parmaktan 1 parmağa geçişte döndürme modunu sıfırla
+                    isRightMouseDown = false;
+                    if (isManualRotating && isAutoRotationEnabled && activePlanetEntity) {
+                        const planetModel = activePlanetEntity.querySelector('a-entity');
+                        if (planetModel) {
+                            const defaultAnim = 'property: rotation; to: 0 360 0; loop: true; dur: 15000; easing: linear';
+                            planetModel.removeAttribute('animation');
+                            setTimeout(() => planetModel.setAttribute('animation', defaultAnim), 100);
+                        }
+                    }
+                    isManualRotating = false;
+                } else if (e.touches.length === 2) {
+                    // Yeni 2 parmak konumunu kaydet
+                    touchState.lastMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                    touchState.lastMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
                 }
             }
         }
