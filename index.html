@@ -986,16 +986,34 @@
             });
 
             // Hedef algılama olayları
+            // lastTrackedTarget: en son taranmış ve ekranda kalan hedef
+            let lastTrackedTarget = null;
+
             for (let i = 0; i < 10; i++) {
                 const target = document.querySelector(`[mindar-image-target="targetIndex: ${i}"]`);
                 if (target) {
                     target.addEventListener('targetFound', (e) => {
                         const planetKey = getPlanetKeyByIndex(i);
+
+                        // Farklı bir kart tarandıysa eski modeli gizle
+                        if (lastTrackedTarget && lastTrackedTarget !== target) {
+                            lastTrackedTarget.setAttribute('visible', 'false');
+                        }
+                        lastTrackedTarget = target;
+
                         onPlanetDetected(planetKey);
                     });
 
                     target.addEventListener('targetLost', (e) => {
-                        onPlanetLost();
+                        // MindAR entity'yi bir sonraki frame'de gizler
+                        // requestAnimationFrame ile bunu override edip modeli donduruyoruz
+                        requestAnimationFrame(() => {
+                            if (target === lastTrackedTarget) {
+                                target.setAttribute('visible', 'true');
+                            }
+                        });
+                        // Bilgi panelı ve model ekranda kalır
+                        stopSpeech();
                     });
                 }
             }
@@ -1065,9 +1083,11 @@
         }
 
         // ===== GEZEGEN KAYBOLDU =====
+        // (Sadece sistem tarafından - yeni kart tarandığında değil, gerçekten gerekirse çağrılır)
         function onPlanetLost() {
             infoPanel.classList.remove('visible');
             stopSpeech();
+            activePlanetEntity = null;
 
             setTimeout(() => {
                 if (!infoPanel.classList.contains('visible')) {
