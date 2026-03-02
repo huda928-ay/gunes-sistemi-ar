@@ -975,15 +975,37 @@
             const sceneEl = document.querySelector('a-scene');
 
             sceneEl.addEventListener('arReady', () => {
+                clearTimeout(arLoadTimeout);
                 setTimeout(() => {
                     loadingScreen.classList.add('hidden');
                 }, 500);
             });
 
             sceneEl.addEventListener('arError', () => {
-                loadingScreen.querySelector('.loading-text').textContent = 'AR Başlatılamadı';
-                loadingScreen.querySelector('.loading-hint').textContent = 'Lütfen kamera erişimine izin verin ve sayfayı yenileyin.';
+                clearTimeout(arLoadTimeout);
+                loadingScreen.querySelector('.loading-text').textContent = '⚠️ Kamera Erişimi Gerekli';
+                loadingScreen.querySelector('.loading-hint').innerHTML =
+                    '1. Adres çubuğundaki 🔒 simgesine tıkla<br>' +
+                    '2. Kamera → <strong>İzin Ver</strong> seç<br>' +
+                    '3. Sayfayı yenile (F5)<br><br>' +
+                    '<button onclick="location.reload()" style="' +
+                    'padding:10px 24px;background:#667eea;border:none;border-radius:20px;' +
+                    'color:#fff;font-size:15px;cursor:pointer;margin-top:8px">🔄 Yeniden Dene</button>';
             });
+
+            // 20 saniye içinde AR başlamazsa kullanıcıya yardım mesajı göster
+            const arLoadTimeout = setTimeout(() => {
+                if (!loadingScreen.classList.contains('hidden')) {
+                    loadingScreen.querySelector('.loading-text').textContent = '⚠️ Kamera Erişimi Gerekli';
+                    loadingScreen.querySelector('.loading-hint').innerHTML =
+                        '1. Adres çubuğundaki 🔒 simgesine tıkla<br>' +
+                        '2. Kamera → <strong>İzin Ver</strong> seç<br>' +
+                        '3. Sayfayı yenile (F5)<br><br>' +
+                        '<button onclick="location.reload()" style="' +
+                        'padding:10px 24px;background:#667eea;border:none;border-radius:20px;' +
+                        'color:#fff;font-size:15px;cursor:pointer;margin-top:8px">🔄 Yeniden Dene</button>';
+                }
+            }, 20000);
 
             // Hedef algılama olayları
             // lastTrackedTarget : en son taranmış hedef (kart gidince model ekranda kalır)
