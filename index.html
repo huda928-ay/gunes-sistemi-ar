@@ -986,8 +986,22 @@
             });
 
             // Hedef algılama olayları
-            // lastTrackedTarget: en son taranmış ve ekranda kalan hedef
+            // lastTrackedTarget : en son taranmış hedef (kart gidince model ekranda kalır)
             let lastTrackedTarget = null;
+            let persistLoopActive = false;  // Sürekli döngüyü kontrol eder
+
+            // Sürekli görünürlük döngüsü: MindAR her frame'de gizleyebilir,
+            // biz her frame'de geri açıyoruz
+            function startPersistLoop(target) {
+                persistLoopActive = true;
+                function loop() {
+                    if (!persistLoopActive || target !== lastTrackedTarget) return;
+                    // Three.js seviyesinde doğrudan görünür yap
+                    if (target.object3D) target.object3D.visible = true;
+                    requestAnimationFrame(loop);
+                }
+                requestAnimationFrame(loop);
+            }
 
             for (let i = 0; i < 10; i++) {
                 const target = document.querySelector(`[mindar-image-target="targetIndex: ${i}"]`);
@@ -995,25 +1009,24 @@
                     target.addEventListener('targetFound', (e) => {
                         const planetKey = getPlanetKeyByIndex(i);
 
-                        // Farklı bir kart tarandıysa eski modeli gizle
+                        // Farklı kart → eski modeli temizle ve döngüyü durdur
                         if (lastTrackedTarget && lastTrackedTarget !== target) {
-                            lastTrackedTarget.setAttribute('visible', 'false');
+                            persistLoopActive = false;
+                            lastTrackedTarget.object3D.visible = false;
                         }
                         lastTrackedTarget = target;
+                        persistLoopActive = false; // Yeni kart bulundu, döngü gerekmez
 
                         onPlanetDetected(planetKey);
                     });
 
                     target.addEventListener('targetLost', (e) => {
-                        // MindAR entity'yi bir sonraki frame'de gizler
-                        // requestAnimationFrame ile bunu override edip modeli donduruyoruz
-                        requestAnimationFrame(() => {
-                            if (target === lastTrackedTarget) {
-                                target.setAttribute('visible', 'true');
-                            }
-                        });
-                        // Bilgi panelı ve model ekranda kalır
-                        stopSpeech();
+                        // Sadece aktif takip edilen kart kaybolunca dondur
+                        if (target === lastTrackedTarget) {
+                            startPersistLoop(target); // Her frame'de görünür tut
+                            stopSpeech();
+                            // Info paneli ve model açık kalır
+                        }
                     });
                 }
             }
