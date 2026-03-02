@@ -1,0 +1,16 @@
+{
+  "name": "gunes-sistemi-ar",
+  "version": "1.0.0",
+  "description": "WebAR tabanlı eğitim uygulaması. Basılı gezegen kartlarını kameraya tutarak 3D gezegen modelleri, bilgi panelleri ve Türkçe sesli anlatım deneyimleyin.",
+  "scripts": {
+    "start": "npx serve . -p 8080"
+  },
+  "keywords": [
+    "WebAR",
+    "AR",
+    "gezegen",
+    "güneş sistemi"
+  ],
+  "author": "",
+  "license": "ISC"
+}

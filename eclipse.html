@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Tutulma Simülasyonu – Güneş Sistemi AR</title>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(ellipse at center, #0a0a1a 0%, #000005 100%);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            /* Mobil: kaydırma + zoom'u engelle, drag düzgün çalışsın */
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* ===== A-FRAME SAHNE ===== */
+        #scene-container {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        a-scene {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* ===== TUTULMA OVERLAY ===== */
+        #eclipse-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            transition: background 1.5s ease;
+        }
+
+        #eclipse-overlay.solar {
+            background: rgba(0, 0, 0, 0.45);
+        }
+
+        #eclipse-overlay.lunar {
+            background: rgba(80, 10, 0, 0.25);
+        }
+
+        /* ===== ÜST BAŞLIK BAR ===== */
+        #top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: rgba(10, 10, 30, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        #back-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            text-decoration: none;
+        }
+
+        #back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #top-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.5px;
+        }
+
+        #top-subtitle {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-left: auto;
+        }
+
+        /* ===== GÖREV ÇUBUĞU ===== */
+        #task-bar {
+            position: fixed;
+            top: 64px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 50, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 20px;
+            padding: 8px 20px;
+            font-size: 13px;
+            color: rgba(200, 220, 255, 0.9);
+            z-index: 100;
+            transition: opacity 0.5s ease;
+            text-align: center;
+            max-width: 90vw;
+            box-shadow: 0 4px 20px rgba(50, 100, 255, 0.2);
+        }
+
+        #task-bar.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* ===== KONTROL BUTONLARI ===== */
+        #controls {
+            position: fixed;
+            top: 70px;
+            right: 16px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .ctrl-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            color: #fff;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s ease;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        .ctrl-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .ctrl-btn.active {
+            background: rgba(100, 140, 255, 0.4);
+            box-shadow: 0 0 16px rgba(100, 140, 255, 0.6);
+        }
+
+        .ctrl-btn.muted {
+            background: rgba(255, 80, 80, 0.3);
+        }
+
+        /* Durum etiketi */
+        .btn-label {
+            position: absolute;
+            right: 52px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.6);
+            white-space: nowrap;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 8px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        /* ===== ECLIPSE BİLGİ PANELİ ===== */
+        #eclipse-panel {
+            position: fixed;
+            bottom: -300px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 92%;
+            max-width: 400px;
+            border-radius: 20px 20px 0 0;
+            padding: 20px;
+            z-index: 200;
+            transition: bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: none;
+        }
+
+        #eclipse-panel.solar-panel {
+            background: linear-gradient(160deg, rgba(10, 5, 0, 0.95) 0%, rgba(30, 15, 0, 0.95) 100%);
+            box-shadow: 0 -10px 40px rgba(255, 100, 0, 0.3);
+            border-color: rgba(255, 150, 0, 0.3);
+        }
+
+        #eclipse-panel.lunar-panel {
+            background: linear-gradient(160deg, rgba(5, 0, 10, 0.95) 0%, rgba(25, 5, 5, 0.95) 100%);
+            box-shadow: 0 -10px 40px rgba(180, 30, 30, 0.3);
+            border-color: rgba(180, 30, 60, 0.3);
+        }
+
+        #eclipse-panel.visible {
+            bottom: 0;
+        }
+
+        .ep-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ep-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+
+        .ep-icon {
+            font-size: 48px;
+            text-align: center;
+            margin-bottom: 10px;
+            display: block;
+            animation: pulse-icon 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-icon {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .ep-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .ep-desc {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+            text-align: center;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            margin-bottom: 14px;
+        }
+
+        .ep-fact {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+
+        .ep-fact+.ep-fact {
+            margin-top: 6px;
+        }
+
+        /* ===== HIZALAMA GÖSTERGESİ ===== */
+        #alignment-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 220px;
+            z-index: 100;
+            text-align: center;
+        }
+
+        #alignment-label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 4px;
+        }
+
+        #alignment-track {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #alignment-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 3px;
+            transition: width 0.2s ease, background 0.4s ease;
+            background: #4466ff;
+        }
+
+        #alignment-fill.solar {
+            background: linear-gradient(90deg, #ff6600, #ffcc00);
+        }
+
+        #alignment-fill.lunar {
+            background: linear-gradient(90deg, #cc2200, #ff6644);
+        }
+
+        /* ===== DRAG HINT ===== */
+        #drag-hint {
+            position: fixed;
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.65);
+            color: rgba(255, 255, 255, 0.8);
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            z-index: 100;
+            pointer-events: none;
+            transition: opacity 0.4s;
+        }
+
+        #drag-hint.hidden {
+            opacity: 0;
+        }
+
+        /* ===== YÜKLENIYOR ===== */
+        #sim-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, #0a0a1a 0%, #000005 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.6s ease;
+        }
+
+        #sim-loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .sim-spinner {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid rgba(100, 150, 255, 0.2);
+            border-top: 3px solid #6699ff;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .sim-load-title {
+            color: #fff;
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .sim-load-sub {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 13px;
+        }
+
+        /* ===== YÖRÜNGE YOLU ===== */
+        /* (A-Frame ile çizilecek, JS'de oluşturulacak) */
+
+        /* ===== EKRAN KISALTI POPUP ===== */
+        #intro-msg {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 10, 30, 0.92);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(100, 150, 255, 0.2);
+            border-radius: 20px;
+            padding: 30px 28px;
+            width: 88%;
+            max-width: 340px;
+            z-index: 300;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 100, 0.4);
+        }
+
+        #intro-msg.hidden {
+            display: none;
+        }
+
+        .intro-icon {
+            font-size: 52px;
+            margin-bottom: 14px;
+            display: block;
+        }
+
+        .intro-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        .intro-text {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .intro-start {
+            display: block;
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, #4466ff 0%, #7733cc 100%);
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .intro-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(80, 100, 255, 0.4);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Yükleniyor -->
+    <div id="sim-loading">
+        <div class="sim-spinner"></div>
+        <div class="sim-load-title">Simülasyon Hazırlanıyor</div>
+        <div class="sim-load-sub">Güneş Sistemi yükleniyor...</div>
+    </div>
+
+    <!-- Intro Popup -->
+    <div id="intro-msg">
+        <span class="intro-icon">🌘</span>
+        <div class="intro-title">Tutulma Simülasyonu</div>
+        <div class="intro-text">
+            Ay'ı <strong>sürükleyerek</strong> Güneş ile Dünya'yı hizala.<br><br>
+            🌞 <strong>Güneş Tutulması:</strong> Ay, Güneş ile Dünya arasına geldiğinde<br>
+            🌕 <strong>Ay Tutulması:</strong> Dünya, Güneş ile Ay arasına girdiğinde
+        </div>
+        <button class="intro-start" id="start-btn">🚀 Simülasyonu Başlat</button>
+    </div>
+
+    <!-- Üst bar -->
+    <div id="top-bar">
+        <a href="index.html" id="back-btn" title="Geri">◀</a>
+        <div>
+            <div id="top-title">🌘 Tutulma Simülasyonu</div>
+        </div>
+        <div id="top-subtitle" id="eclipse-status-text">Oto-mod aktif</div>
+    </div>
+
+    <!-- Görev çubuğu -->
+    <div id="task-bar">
+        🌙 Ay'ı sürükle • Güneş ile Dünya arasına getir → <strong>Güneş Tutulması!</strong>
+    </div>
+
+    <!-- Kontrol butonları -->
+    <div id="controls">
+        <div style="position:relative">
+            <button class="ctrl-btn active" id="auto-btn" title="Otomatik Mod">▶</button>
+        </div>
+        <div style="position:relative">
+            <button class="ctrl-btn" id="sound-btn" title="Ses Aç/Kapat">🔊</button>
+        </div>
+        <div style="position:relative">
+            <button class="ctrl-btn" id="speed-btn" title="Hız">⏩</button>
+        </div>
+        <div style="position:relative">
+            <button class="ctrl-btn" id="reset-btn" title="Sıfırla">↺</button>
+        </div>
+    </div>
+
+    <!-- Hizalama göstergesi -->
+    <div id="alignment-bar">
+        <div id="alignment-label">Hizalanma: 0%</div>
+        <div id="alignment-track">
+            <div id="alignment-fill"></div>
+        </div>
+    </div>
+
+    <!-- Sürükleme ipucu -->
+    <div id="drag-hint">☝️ Ay'a dokunup sürükle</div>
+
+    <!-- Eclipse overlay -->
+    <div id="eclipse-overlay"></div>
+
+    <!-- Eclipse bilgi paneli -->
+    <div id="eclipse-panel">
+        <button class="ep-close" id="ep-close-btn">✕</button>
+        <span class="ep-icon" id="ep-icon">☀️</span>
+        <div class="ep-title" id="ep-title">Güneş Tutulması</div>
+        <div class="ep-desc" id="ep-desc">Ay, Güneş ile Dünya arasına girdi. Güneş'in ışığı Dünya'ya ulaşamıyor.</div>
+        <div class="ep-fact" id="ep-fact1">🌑 Ay'ın gölgesi Dünya yüzeyine düşer</div>
+        <div class="ep-fact" id="ep-fact2">⏱ Toplam karartma 2–7 dakika sürebilir</div>
+    </div>
+
+    <!-- A-Frame Sahnesi -->
+    <div id="scene-container">
+        <!-- Mobilde antialias ve renderer ağır, kapatılıyor -->
+        <a-scene embedded background="color: #000005"
+            renderer="antialias: false; colorManagement: false; maxCanvasWidth: 1920; maxCanvasHeight: 1920"
+            vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" id="main-scene">
+
+            <!-- Dokular -->
+            <a-assets timeout="15000">
+                <img id="sun-tex" src="assets/textures/gunes.jpg" crossorigin="anonymous">
+                <img id="earth-tex" src="assets/textures/dunya.jpg" crossorigin="anonymous">
+                <img id="moon-tex" src="assets/textures/ay.jpg" crossorigin="anonymous">
+            </a-assets>
+
+            <!-- Kamera: sabit, look-controls kapalı (mobilde gyroscope sürüklemeyi bozar) -->
+            <a-camera id="main-camera" position="0 0.5 3.5" look-controls="enabled: false"
+                wasd-controls="enabled: false">
+            </a-camera>
+
+            <!-- Ambient ışık (tutulmada kısılacak) -->
+            <a-light id="ambient-light" type="ambient" color="#ffffff" intensity="0.7"></a-light>
+            <!-- Güneş noktasal ışığı -->
+            <a-light id="sun-point" type="point" color="#fff8e0" intensity="1.5" position="-2.2 0 0" distance="12"
+                decay="1">
+            </a-light>
+
+            <!-- === ANA SİSTEM === -->
+            <a-entity id="solar-system" position="0 0 0">
+
+                <!-- Arka plan yıldızları (basit parçacıklar) -->
+                <a-entity id="stars"></a-entity>
+
+                <!-- GÜNEŞ -->
+                <a-entity id="sun-entity" position="-2.2 0 0">
+                    <!-- Güneş küresi -->
+                    <a-sphere id="sun-sphere" radius="0.55" src="#sun-tex"
+                        material="emissive: #ff5500; emissiveIntensity: 0.4; side: double">
+                        <!-- Güneş dönüşü -->
+                        <a-animation attribute="rotation" to="0 360 0" dur="25000" repeat="indefinite" easing="linear">
+                        </a-animation>
+                    </a-sphere>
+                    <!-- Dış korona halo 1 -->
+                    <a-sphere id="sun-glow-1" radius="0.65" color="#ffaa00" material="opacity: 0.18; transparent: true;
+                                  emissive: #ff6600; emissiveIntensity: 0.8; side: double">
+                        <a-animation attribute="scale" from="1 1 1" to="1.06 1.06 1.06" dir="alternate" dur="1200"
+                            repeat="indefinite" easing="easeInOutSine">
+                        </a-animation>
+                    </a-sphere>
+                    <!-- Dış korona halo 2 -->
+                    <a-sphere id="sun-glow-2" radius="0.78" color="#ff8800" material="opacity: 0.07; transparent: true;
+                                  emissive: #ff4400; emissiveIntensity: 0.5; side: double">
+                        <a-animation attribute="scale" from="1 1 1" to="1.1 1.1 1.1" dir="alternate" dur="2000"
+                            repeat="indefinite" easing="easeInOutSine">
+                        </a-animation>
+                    </a-sphere>
+                </a-entity>
+
+                <!-- DÜNYA -->
+                <a-entity id="earth-entity" position="0 0 0">
+                    <!-- Dünya küresi -->
+                    <a-sphere id="earth-sphere" radius="0.32" src="#earth-tex" material="side: double">
+                        <a-animation attribute="rotation" to="0 360 0" dur="12000" repeat="indefinite" easing="linear">
+                        </a-animation>
+                    </a-sphere>
+                    <!-- Dünya atmosfer -->
+                    <a-sphere radius="0.34" color="#4488ff" material="opacity: 0.08; transparent: true; side: double">
+                    </a-sphere>
+                    <!-- Dünya gölgesi (lunar eclipse'de görünür) -->
+                    <a-sphere id="earth-shadow-sphere" radius="0.20" color="#000020"
+                        material="opacity: 0; transparent: true; side: double" position="0.55 0 0">
+                    </a-sphere>
+                </a-entity>
+
+                <!-- YÖRÜNGELİ AY KAPSAYICI -->
+                <a-entity id="moon-orbit-pivot" position="0 0 0" rotation="0 0 0">
+                    <!-- Ay: yatay eksende yörüngede -->
+                    <a-entity id="moon-holder" position="1.18 0 0">
+                        <a-sphere id="moon-sphere" radius="0.13" src="#moon-tex" material="side: double">
+                            <a-animation attribute="rotation" to="0 360 0" dur="30000" repeat="indefinite"
+                                easing="linear">
+                            </a-animation>
+                        </a-sphere>
+                        <!-- Ay parlaklık halo (lunar eclipse'de kırmızıya döner) -->
+                        <a-sphere id="moon-glow" radius="0.15" color="#cccccc"
+                            material="opacity: 0.06; transparent: true; side: double">
+                        </a-sphere>
+                    </a-entity>
+                </a-entity>
+
+                <!-- Yörünge çemberi (dekoratif) -->
+                <a-torus id="orbit-ring" position="0 0 0" radius="1.18" radius-tubular="0.004" color="#3344aa"
+                    material="opacity: 0.25; transparent: true; side: double" rotation="90 0 0">
+                </a-torus>
+
+            </a-entity>
+
+        </a-scene>
+    </div>
+
+    <script>
+        /* ================================================================
+           TUTULMA SİMÜLASYON SİSTEMİ
+           ================================================================ */
+
+        // ── Sabitler ──────────────────────────────────────────────
+        const ORBIT_RADIUS = 1.18;   // Ay'ın Dünya'dan uzaklığı (birim)
+        const EARTH_POS = { x: 0, y: 0, z: 0 };
+        const SUN_POS = { x: -2.2, y: 0, z: 0 };
+        const ORBIT_SPEED_BASE = 15;     // derece/saniye (normal hız)
+        const ALIGNMENT_THRESH = 0.93;   // cos eşiği (~21.5°, tutulma)
+
+        // ── Durum değişkenleri ───────────────────────────────────
+        let orbitAngleDeg = 90;    // Ay'ın açısal konumu (derece)
+        let isAutoMode = true;
+        let isDragging = false;
+        let isSoundEnabled = true;
+        let speedMultiplier = 1;
+        let dragResumeTimer = null;
+        let eclipseState = 'none'; // 'none' | 'solar' | 'lunar'
+        let lastTimestamp = null;
+        let simRunning = false;
+        let introShown = true;
+
+        // Audio
+        const solarAudio = new Audio('assets/solar_eclipse.mp3');
+        const lunarAudio = new Audio('assets/lunar_eclipse.mp3');
+        solarAudio.volume = 0.7;
+        lunarAudio.volume = 0.7;
+        [solarAudio, lunarAudio].forEach(a => {
+            a.onerror = () => { };
+            a.preload = 'none';
+        });
+
+        // ── DOM Referansları ─────────────────────────────────────
+        const moonPivot = () => document.getElementById('moon-orbit-pivot');
+        const moonHolder = () => document.getElementById('moon-holder');
+        const moonSphere = () => document.getElementById('moon-sphere');
+        const moonGlow = () => document.getElementById('moon-glow');
+        const sunGlow1 = () => document.getElementById('sun-glow-1');
+        const sunGlow2 = () => document.getElementById('sun-glow-2');
+        const earthShadow = () => document.getElementById('earth-shadow-sphere');
+        const ambientLight = () => document.getElementById('ambient-light');
+        const eclipsePanel = () => document.getElementById('eclipse-panel');
+        const eclipseOverlay = () => document.getElementById('eclipse-overlay');
+        const alignFill = () => document.getElementById('alignment-fill');
+        const alignLabel = () => document.getElementById('alignment-label');
+        const taskBar = () => document.getElementById('task-bar');
+        const introMsg = () => document.getElementById('intro-msg');
+        const loadingScreen = () => document.getElementById('sim-loading');
+        const dragHint = () => document.getElementById('drag-hint');
+
+        // ── Yardımcı Fonksiyonlar ────────────────────────────────
+        function vec3(x, y, z) { return { x, y, z }; }
+
+        function normalize(v) {
+            const len = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+            if (len < 1e-8) return vec3(0, 0, 0);
+            return vec3(v.x / len, v.y / len, v.z / len);
+        }
+
+        function dot(a, b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+
+        function sub(a, b) { return vec3(a.x - b.x, a.y - b.y, a.z - b.z); }
+
+        function lerp(a, b, t) { return a + (b - a) * t; }
+
+        function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+        // Smooth transition helper
+        function setOpacity(el, val, duration) {
+            if (!el) return;
+            const mat = el.getAttribute('material') || {};
+            el.setAttribute('material', {
+                opacity: val,
+                transparent: true
+            });
+        }
+
+        // ── Ay Konumunu Hesapla ───────────────────────────────────
+        function getMoonWorldPos() {
+            const rad = orbitAngleDeg * Math.PI / 180;
+            return vec3(
+                EARTH_POS.x + ORBIT_RADIUS * Math.cos(rad),
+                EARTH_POS.y,
+                EARTH_POS.z + ORBIT_RADIUS * Math.sin(rad)
+            );
+        }
+
+        // ── Ay Görsel Konumunu Güncelle ───────────────────────────
+        function applyMoonPosition() {
+            const pivot = moonPivot();
+            if (!pivot) return;
+            pivot.setAttribute('rotation', `0 ${-orbitAngleDeg} 0`);
+        }
+
+        // ── Tutulma Tespiti ───────────────────────────────────────
+        function checkEclipse() {
+            const moonPos = getMoonWorldPos();
+
+            // Güneş → Dünya vektörü
+            const vecSE = normalize(sub(EARTH_POS, SUN_POS));
+            // Güneş → Ay vektörü
+            const vecSM = normalize(sub(moonPos, SUN_POS));
+            // Dünya → Ay vektörü
+            const vecEM = normalize(sub(moonPos, EARTH_POS));
+            // Dünya → Güneş vektörü
+            const vecES = normalize(sub(SUN_POS, EARTH_POS));
+
+            // Güneş tutulması: Ay, Güneş ile Dünya arasında (Moon between Sun & Earth)
+            // → vecSE ve vecSM paralel VE Ay Dünya'ya daha yakın
+            const dotSolar = dot(vecSE, vecSM);
+
+            // Ay tutulması: Dünya, Güneş ile Ay arasında (Earth between Sun & Moon)
+            // → vecEM ile vecES ters yönlü (Ay, Dünya'nın Güneş'ten uzak tarafında)
+            const dotLunar = dot(vecEM, normalize(sub(EARTH_POS, SUN_POS)));
+            // Ay'ın Güneş'ten uzak olduğunu doğrula: dot(vecEM, vecES) < 0
+            const moonOnFarSide = dot(vecEM, vecES) < 0;
+
+            let newState = 'none';
+            let alignVal = 0;
+
+            if (dotSolar > ALIGNMENT_THRESH) {
+                // Ay, Güneş ile Dünya arasında mı? → Ay'ın x konumu Güneş ile Dünya arasında olmalı
+                const moonX = moonPos.x;
+                if (moonX > SUN_POS.x && moonX < EARTH_POS.x) {
+                    newState = 'solar';
+                    alignVal = ((dotSolar - ALIGNMENT_THRESH) / (1 - ALIGNMENT_THRESH)) * 100;
+                }
+            }
+
+            if (newState === 'none' && moonOnFarSide) {
+                // Dünya, Güneş ile Ay arasında: Ay uzak tarafta
+                const dotLunarCheck = dot(normalize(sub(EARTH_POS, SUN_POS)), normalize(sub(moonPos, SUN_POS)));
+                if (dotLunarCheck > ALIGNMENT_THRESH) {
+                    newState = 'lunar';
+                    alignVal = ((dotLunarCheck - ALIGNMENT_THRESH) / (1 - ALIGNMENT_THRESH)) * 100;
+                }
+            }
+
+            // Genel hizalanma barı: en büyük dot
+            const generalAlign = Math.max(0, (Math.max(dotSolar, moonOnFarSide ? dot(normalize(sub(EARTH_POS, SUN_POS)), normalize(sub(moonPos, SUN_POS))) : 0) - 0.6) / 0.4 * 100);
+            updateAlignmentBar(newState !== 'none' ? alignVal : clamp(generalAlign, 0, 99), newState);
+
+            if (newState !== eclipseState) {
+                triggerEclipseChange(newState);
+            }
+        }
+
+        // ── Tutulma Değişimi ─────────────────────────────────────
+        function triggerEclipseChange(newState) {
+            eclipseState = newState;
+
+            if (newState === 'solar') {
+                applyVisuals('solar');
+                showEclipsePanel('solar');
+                playAudio('solar');
+                taskBar().innerHTML = '☀️ <strong>Güneş Tutulması oluştu!</strong> Harika iş! 🎉';
+                taskBar().classList.remove('hidden');
+            } else if (newState === 'lunar') {
+                applyVisuals('lunar');
+                showEclipsePanel('lunar');
+                playAudio('lunar');
+                taskBar().innerHTML = '🌕 <strong>Ay Tutulması oluştu!</strong> Harika iş! 🎉';
+                taskBar().classList.remove('hidden');
+            } else {
+                clearVisuals();
+                hideEclipsePanel();
+                setNextTask();
+            }
+        }
+
+        // ── Görsel Efektler ───────────────────────────────────────
+        function applyVisuals(type) {
+            if (type === 'solar') {
+                // Güneş sönükleşir
+                sunGlow1().setAttribute('material', 'opacity: 0.04; transparent: true; emissive:#ff6600; emissiveIntensity: 0.2');
+                sunGlow2().setAttribute('material', 'opacity: 0.02; transparent: true; emissive:#ff4400; emissiveIntensity: 0.1');
+                // Ortam karardı
+                ambientLight().setAttribute('intensity', '0.25');
+                // Yerdeki gölge beliri
+                earthShadow().setAttribute('material', 'opacity: 0.0; transparent: true');
+                // Overlay
+                eclipseOverlay().className = 'solar';
+                // Ay normale dönsün
+                moonSphere().setAttribute('material', 'src: #moon-tex; side: double');
+                moonGlow().setAttribute('material', 'color: #cccccc; opacity: 0.06; transparent: true');
+            } else if (type === 'lunar') {
+                // Ay kırmızılaşır
+                moonSphere().setAttribute('material', 'src: #moon-tex; color: #cc4422; side: double');
+                moonGlow().setAttribute('material', 'color: #cc2200; opacity: 0.15; transparent: true');
+                // Hafif karartma
+                ambientLight().setAttribute('intensity', '0.45');
+                eclipseOverlay().className = 'lunar';
+                // Güneş normal
+                sunGlow1().setAttribute('material', 'opacity: 0.18; transparent: true; emissive:#ff6600; emissiveIntensity: 0.8');
+                sunGlow2().setAttribute('material', 'opacity: 0.07; transparent: true; emissive:#ff4400; emissiveIntensity: 0.5');
+            }
+        }
+
+        function clearVisuals() {
+            ambientLight().setAttribute('intensity', '0.7');
+            eclipseOverlay().className = '';
+            sunGlow1().setAttribute('material', 'opacity: 0.18; transparent: true; emissive:#ff6600; emissiveIntensity: 0.8');
+            sunGlow2().setAttribute('material', 'opacity: 0.07; transparent: true; emissive:#ff4400; emissiveIntensity: 0.5');
+            moonSphere().setAttribute('material', 'src: #moon-tex; side: double');
+            moonGlow().setAttribute('material', 'color: #cccccc; opacity: 0.06; transparent: true');
+            earthShadow().setAttribute('material', 'opacity: 0.0; transparent: true');
+        }
+
+        // ── Panel ─────────────────────────────────────────────────
+        function showEclipsePanel(type) {
+            const panel = eclipsePanel();
+            panel.className = type === 'solar' ? 'solar-panel visible' : 'lunar-panel visible';
+
+            if (type === 'solar') {
+                document.getElementById('ep-icon').textContent = '☀️🌑';
+                document.getElementById('ep-title').textContent = 'Güneş Tutulması';
+                document.getElementById('ep-desc').textContent =
+                    'Ay, Güneş ile Dünya arasına girdi. Güneş\'in ışığı Dünya\'ya ulaşamıyor. Dünya üzerinde Ay\'ın gölgesi görünür.';
+                document.getElementById('ep-fact1').textContent = '🌑 Tam tutulmada yıldızlar gündüz görünür';
+                document.getElementById('ep-fact2').textContent = '⏱ Karartma süresi 2–7 dakika sürebilir';
+            } else {
+                document.getElementById('ep-icon').textContent = '🌕🔴';
+                document.getElementById('ep-title').textContent = 'Ay Tutulması';
+                document.getElementById('ep-desc').textContent =
+                    'Dünya\'nın gölgesi Ay üzerine düştü. Ay kırmızımsı "kan Ay" tonuna büründü.';
+                document.getElementById('ep-fact1').textContent = '🔴 Kırmızı renk, Dünya\'nın atmosferinden geçen ışıktan kaynaklanır';
+                document.getElementById('ep-fact2').textContent = '⏱ Ay tutulması saatlerce sürebilir';
+            }
+        }
+
+        function hideEclipsePanel() {
+            const panel = eclipsePanel();
+            panel.classList.remove('visible');
+        }
+
+        document.getElementById('ep-close-btn').addEventListener('click', () => {
+            hideEclipsePanel();
+        });
+
+        // ── Hizalanma Barı ────────────────────────────────────────
+        function updateAlignmentBar(pct, state) {
+            const fill = alignFill();
+            const label = alignLabel();
+            fill.style.width = clamp(pct, 0, 100) + '%';
+            fill.className = state !== 'none' ? state : '';
+            label.textContent = `Hizalanma: ${Math.round(clamp(pct, 0, 100))}%`;
+        }
+
+        // ── Görev Metni ───────────────────────────────────────────
+        function setNextTask() {
+            const angle = ((orbitAngleDeg % 360) + 360) % 360;
+            if (angle > 90 && angle < 270) {
+                taskBar().innerHTML = '🌙 Ay\'ı sürükle • Güneş ile Dünya arasına getir → <strong>Güneş Tutulması!</strong>';
+            } else {
+                taskBar().innerHTML = '🌍 Ay\'ı Dünya\'nın arkasına getir → <strong>Ay Tutulması!</strong>';
+            }
+            taskBar().classList.remove('hidden');
+        }
+
+        // ── Ses ───────────────────────────────────────────────────
+        function playAudio(type) {
+            if (!isSoundEnabled) return;
+            solarAudio.pause(); solarAudio.currentTime = 0;
+            lunarAudio.pause(); lunarAudio.currentTime = 0;
+            if (type === 'solar') solarAudio.play().catch(() => { });
+            else lunarAudio.play().catch(() => { });
+        }
+
+        function stopAllAudio() {
+            solarAudio.pause();
+            lunarAudio.pause();
+        }
+
+        // ── Animasyon Döngüsü ────────────────────────────────────
+        function tick(timestamp) {
+            if (!simRunning) { requestAnimationFrame(tick); return; }
+
+            if (lastTimestamp === null) lastTimestamp = timestamp;
+            const dt = Math.min(timestamp - lastTimestamp, 100); // max 100ms
+            lastTimestamp = timestamp;
+
+            if (isAutoMode && !isDragging) {
+                orbitAngleDeg += ORBIT_SPEED_BASE * speedMultiplier * dt / 1000;
+                orbitAngleDeg = ((orbitAngleDeg % 360) + 360) % 360;
+            }
+
+            applyMoonPosition();
+            checkEclipse();
+
+            requestAnimationFrame(tick);
+        }
+
+        // ── Sürükleme Etkileşimi ─────────────────────────────────
+        // Ay'ın ekran koordinatını takip et
+        let dragActive = false;
+        let dragStartAngle = 0;
+        let dragCenter = { x: 0, y: 0 }; // Dünya'nın ekran merkezi
+
+        function getEarthScreenCenter() {
+            const sceneEl = document.querySelector('a-scene');
+            const camEl = document.getElementById('main-camera');
+            const earthEl = document.getElementById('earth-entity');
+            if (!sceneEl || !camEl || !earthEl) return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+            // Earth world position (0,0,0) → project to screen
+            const camera = camEl.getObject3D('camera');
+            const earthObj = earthEl.object3D;
+            if (!camera || !earthObj) return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+            const worldPos = new THREE.Vector3();
+            earthObj.getWorldPosition(worldPos);
+            worldPos.project(camera);
+
+            return {
+                x: (worldPos.x + 1) / 2 * window.innerWidth,
+                y: (-worldPos.y + 1) / 2 * window.innerHeight
+            };
+        }
+
+        function pointerToOrbitAngle(clientX, clientY) {
+            const center = getEarthScreenCenter();
+            const dx = clientX - center.x;
+            const dy = clientY - center.y;
+            // A-Frame X ekranın sağı, Z ekranın uzağı
+            // Görünüm: kamera z=3.5'ten bakıyor → X sağ, Y yukarı
+            // Yatay eksen X, dikey eksen -Y → atan2 ile açı
+            const angleRad = Math.atan2(dy, dx);
+            return angleRad * 180 / Math.PI;
+        }
+
+        function onDragStart(clientX, clientY) {
+            // Ay'ın ekran konumunu hesapla
+            const moonEl = document.getElementById('moon-holder');
+            const camEl = document.getElementById('main-camera');
+            if (!moonEl || !camEl) return;
+
+            const camera = camEl.getObject3D('camera');
+            const moonObj = moonEl.object3D;
+            if (!camera || !moonObj) return;
+
+            const worldPos = new THREE.Vector3();
+            moonObj.getWorldPosition(worldPos);
+            worldPos.project(camera);
+
+            const moonScreenX = (worldPos.x + 1) / 2 * window.innerWidth;
+            const moonScreenY = (-worldPos.y + 1) / 2 * window.innerHeight;
+
+            // Mobilde parmak büyük, toleransı artır (140px)
+            const isMobile = ('ontouchstart' in window);
+            const hitRadius = isMobile ? 140 : 100;
+            const dist = Math.sqrt((clientX - moonScreenX) ** 2 + (clientY - moonScreenY) ** 2);
+            if (dist > hitRadius) return;
+
+            dragActive = true;
+            isDragging = true;
+            dragCenter = getEarthScreenCenter();
+
+            // Auto modu geçici durdur
+            clearTimeout(dragResumeTimer);
+
+            // Look-controls zaten kapalı, extra işlem gereksiz
+
+            dragHint().classList.add('hidden');
+        }
+
+        function onDragMove(clientX, clientY) {
+            if (!dragActive) return;
+
+            const center = getEarthScreenCenter();
+            const dx = clientX - center.x;
+            const dy = clientY - center.y;
+
+            // Ekran koordinatından yörünge açısına dönüştür
+            // Kamera varsayılan pozisyon (0, 0.5, 3.5) → neredeyse düz bakış
+            // X ekseni doğru, Y ekseni ters
+            const angleRad = Math.atan2(dy, dx);
+            // Hesaplanan açı ekran koordinatında: sağ=0, yukarı=90 gibi
+            // A-Frame'de Y ekseni etrafındaki dönüş: pivot.rotation.y = -orbitAngleDeg
+            // Bunu ters çevirelim:
+            orbitAngleDeg = -(angleRad * 180 / Math.PI);
+            orbitAngleDeg = ((orbitAngleDeg % 360) + 360) % 360;
+        }
+
+        function onDragEnd() {
+            if (!dragActive) return;
+            dragActive = false;
+            isDragging = false;
+
+            // 3 saniye sonra auto-mode tekrar devam (eğer açıksa)
+            if (isAutoMode) {
+                dragResumeTimer = setTimeout(() => {
+                    isDragging = false;
+                }, 3000);
+            }
+        }
+
+        // Touch olayları
+        document.addEventListener('touchstart', (e) => {
+            if (!simRunning) return;
+            const t = e.touches[0];
+            onDragStart(t.clientX, t.clientY);
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!dragActive) return;
+            e.preventDefault();
+            const t = e.touches[0];
+            onDragMove(t.clientX, t.clientY);
+        }, { passive: false });
+
+        document.addEventListener('touchend', () => {
+            onDragEnd();
+        });
+
+        // Mouse olayları (PC test için)
+        document.addEventListener('mousedown', (e) => {
+            if (!simRunning) return;
+            if (e.button !== 0) return;
+            onDragStart(e.clientX, e.clientY);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!dragActive) return;
+            onDragMove(e.clientX, e.clientY);
+        });
+
+        document.addEventListener('mouseup', () => {
+            onDragEnd();
+        });
+
+        // ── Kontrol Butonları ─────────────────────────────────────
+        document.getElementById('auto-btn').addEventListener('click', () => {
+            isAutoMode = !isAutoMode;
+            const btn = document.getElementById('auto-btn');
+            btn.textContent = isAutoMode ? '▶' : '⏸';
+            btn.classList.toggle('active', isAutoMode);
+            if (isAutoMode) lastTimestamp = null;
+        });
+
+        document.getElementById('sound-btn').addEventListener('click', () => {
+            isSoundEnabled = !isSoundEnabled;
+            const btn = document.getElementById('sound-btn');
+            btn.textContent = isSoundEnabled ? '🔊' : '🔇';
+            btn.classList.toggle('muted', !isSoundEnabled);
+            if (!isSoundEnabled) stopAllAudio();
+        });
+
+        let speedIdx = 0;
+        const speeds = [1, 2, 4, 0.25];
+        const speedLabels = ['1×', '2×', '4×', '¼×'];
+        document.getElementById('speed-btn').addEventListener('click', () => {
+            speedIdx = (speedIdx + 1) % speeds.length;
+            speedMultiplier = speeds[speedIdx];
+            document.getElementById('speed-btn').title = `Hız: ${speedLabels[speedIdx]}`;
+            // Kısa görsel geri bildirim
+            document.getElementById('speed-btn').style.boxShadow = '0 0 16px rgba(255,200,0,0.6)';
+            setTimeout(() => {
+                document.getElementById('speed-btn').style.boxShadow = '';
+            }, 600);
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            orbitAngleDeg = 90;
+            eclipseState = 'none';
+            clearVisuals();
+            hideEclipsePanel();
+            setNextTask();
+            isDragging = false;
+            clearTimeout(dragResumeTimer);
+        });
+
+        // ── Intro & Yükleme ──────────────────────────────────────
+        document.getElementById('start-btn').addEventListener('click', () => {
+            introMsg().classList.add('hidden');
+            simRunning = true;
+            setNextTask();
+
+            // Drag hint'i birkaç saniye sonra gizle
+            setTimeout(() => {
+                dragHint().classList.add('hidden');
+            }, 6000);
+        });
+
+        // A-Frame yüklenince loading kaldır
+        document.addEventListener('DOMContentLoaded', () => {
+            const sceneEl = document.querySelector('a-scene');
+
+            // Yükleniyor ekranı
+            const hideLoading = () => {
+                setTimeout(() => {
+                    loadingScreen().classList.add('hidden');
+                }, 800);
+            };
+
+            if (sceneEl.hasLoaded) {
+                hideLoading();
+            } else {
+                sceneEl.addEventListener('loaded', hideLoading);
+            }
+
+            // Yıldızları oluştur
+            createStars();
+        });
+
+        // Arkaplan yıldızları oluştur (mobilde daha az)
+        function createStars() {
+            const starsEl = document.getElementById('stars');
+            if (!starsEl) return;
+
+            // Mobilde performans için daha az yıldız
+            const isMobile = ('ontouchstart' in window) || window.innerWidth < 768;
+            const starCount = isMobile ? 80 : 200;
+
+            for (let i = 0; i < starCount; i++) {
+                const star = document.createElement('a-sphere');
+                const r = 0.01 + Math.random() * 0.015;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                const dist = 8 + Math.random() * 4;
+                const x = dist * Math.sin(phi) * Math.cos(theta);
+                const y = dist * Math.sin(phi) * Math.sin(theta);
+                const z = dist * Math.cos(phi);
+                const brightness = 0.4 + Math.random() * 0.6;
+
+                star.setAttribute('radius', r);
+                star.setAttribute('position', `${x.toFixed(2)} ${y.toFixed(2)} ${z.toFixed(2)}`);
+                star.setAttribute('color', `rgb(${Math.round(brightness * 255)},${Math.round(brightness * 245)},${Math.round(brightness * 255)})`);
+                star.setAttribute('material', 'emissive: #ffffff; emissiveIntensity: 0.8; shader: flat');
+                starsEl.appendChild(star);
+            }
+        }
+
+        // Animasyon başlat
+        requestAnimationFrame(tick);
+
+    </script>
+
+</body>
+
+</html>
